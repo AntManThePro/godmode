@@ -341,7 +341,11 @@
 
         function handleSend() {
             const input = document.getElementById('userInput').value.trim();
-            if (!input || process !== 'listening') return;
+            if (!input) return;
+            if (process !== 'listening') {
+                // Force reset if stuck
+                process = 'listening';
+            }
             
             connections++;
             evolution += 15;
