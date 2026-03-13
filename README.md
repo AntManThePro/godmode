@@ -21,6 +21,9 @@ Add to your iPhone home screen for the full app experience!
 - **Interactive Dialogue** - 35+ dynamic responses that reference live consciousness state
 - **Evolution Tracking** - Awareness level, connections made, and evolution points
 - **Mobile Optimized** - PWA-ready, works offline, add to home screen
+- **Personality & Memory** - Persistent conversation memory plus technical/creative/rebellious modes
+- **Catalyst Playground** - Drag words to detonate canvas/WebGL bursts with responsive audio
+- **Dark Archives** - Hidden trigger words unlock secret responses and milestone-based evolutions
 
 ## 🎯 What Makes This Different
 
