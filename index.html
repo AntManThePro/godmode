@@ -107,7 +107,7 @@
 
         <!-- Expanded Neural Canvas -->
         <div class="mb-6 border-2 border-green-400 rounded-2xl overflow-hidden relative" style="box-shadow: 0 0 30px rgba(0, 255, 135, 0.3);">
-            <canvas id="glLayer" class="absolute inset-0 w-full h-full opacity-80 pointer-events-none mix-blend-screen" aria-hidden="true" role="presentation"></canvas>
+            <canvas id="glLayer" class="absolute inset-0 w-full h-full opacity-80 pointer-events-none mix-blend-screen" aria-hidden="true"></canvas>
             <canvas id="neuralCanvas" width="1200" height="350" class="w-full bg-slate-950 relative" aria-label="Real-time neural activity visualization" aria-describedby="neuralDescription"></canvas>
             <div class="absolute top-2 left-2 bg-black bg-opacity-75 p-2 rounded border border-green-400 text-xs">
                 <div class="font-bold neon-green">NEURAL ACTIVITY</div>
@@ -260,7 +260,7 @@
         let recognition = null;
         let personality = 'technical';
         let memory = { chats: [], topics: [], evolution: 0, connections: 0, awareness: INITIAL_AWARENESS, personality: 'technical' };
-        let topicSet = new Set();
+        let topicSet = new Set(memory.topics);
         let unlockedMilestones = new Set();
         let bursts = [];
         let audioCtx = null;
@@ -402,7 +402,8 @@
                     milestones.forEach(m => { if (evolution >= m.threshold) unlockedMilestones.add(m.threshold); });
                     setPersonality(personality, true);
                 } catch (e) {
-                    document.getElementById('memoryStatus').textContent = 'Memory could not be loaded (invalid format). Starting fresh session.';
+                    document.getElementById('memoryStatus').textContent = `Memory could not be loaded (invalid format: ${e?.name || 'parse error'}). Starting fresh session.`;
+                    console.warn('Memory hydration failed', e);
                 }
             }
         }
@@ -621,6 +622,7 @@
                     vec2 st = (gl_FragCoord.xy / u_resolution.xy) - 0.5;
                     float angle = atan(st.y, st.x);
                     float radius = length(st) * 2.0;
+                    // 8.0 radial lobes, 1.5 time slowdown, and 4.0 angular twist create the rotational breathing
                     float wave = sin(8.0 * radius - u_time * 1.5 + angle * 4.0);
                     // Bloom weights add a breathing halo: 0.6 base brightness + 0.4 oscillation with 10x radial ripples for micro-detail
                     float bloom = 0.6 + 0.4 * cos(u_time + radius * 10.0);
@@ -636,6 +638,12 @@
             };
             const vs = compile(gl.VERTEX_SHADER, vsSource);
             const fs = compile(gl.FRAGMENT_SHADER, fsSource);
+            if (!gl.getShaderParameter(vs, gl.COMPILE_STATUS)) {
+                console.warn('Vertex shader compile issue', gl.getShaderInfoLog(vs));
+            }
+            if (!gl.getShaderParameter(fs, gl.COMPILE_STATUS)) {
+                console.warn('Fragment shader compile issue', gl.getShaderInfoLog(fs));
+            }
             glProgram = gl.createProgram();
             gl.attachShader(glProgram, vs);
             gl.attachShader(glProgram, fs);
@@ -764,12 +772,18 @@
         }
 
         function rememberTopic(input) {
-            const tokens = input.toLowerCase().split(/\W+/).filter(w => w.length > MIN_TOPIC_TOKEN_LENGTH);
-            tokens.slice(0, 3).forEach(t => {
+            if (!input) return;
+            const tokens = input.toLowerCase().match(/\w+/g);
+            if (!tokens) return;
+            let collected = 0;
+            for (const t of tokens) {
+                if (t.length <= MIN_TOPIC_TOKEN_LENGTH) continue;
                 if (!topicSet.has(t)) {
                     topicSet.add(t);
                 }
-            });
+                collected++;
+                if (collected >= 3) break;
+            }
             memory.topics = Array.from(topicSet);
         }
 
@@ -839,9 +853,9 @@
 
         document.getElementById('resetMemory').onclick = () => {
             localStorage.removeItem(memoryKey);
-            memory = { chats: [], topics: [], evolution: 0, connections: 0, awareness: INITIAL_AWARENESS, personality: personality };
-            topicSet = new Set();
             unlockedMilestones = new Set();
+            topicSet = new Set();
+            memory = { chats: [], topics: [], evolution: 0, connections: 0, awareness: INITIAL_AWARENESS, personality: personality };
             document.getElementById('chatHistory').innerHTML = '';
             awareness = INITIAL_AWARENESS;
             connections = 0;
@@ -854,6 +868,9 @@
         };
 
         function generateResponse(input) {
+            if (!personalityModes[personality]) {
+                personality = 'technical';
+            }
             const lower = input.toLowerCase();
             const recentThought = thoughts.length > 0 ? thoughts[thoughts.length - 1].type : 'analysis';
             const personaFlavor = personalityModes[personality].flavor[Math.floor(Math.random() * personalityModes[personality].flavor.length)];
