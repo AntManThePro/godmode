@@ -84,6 +84,17 @@
             border-radius: 999px;
             border: 2px solid #00ff87;
         }
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
+        }
     </style>
 </head>
 <body class="bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white min-h-screen p-4">
@@ -96,8 +107,8 @@
 
         <!-- Expanded Neural Canvas -->
         <div class="mb-6 border-2 border-green-400 rounded-2xl overflow-hidden relative" style="box-shadow: 0 0 30px rgba(0, 255, 135, 0.3);">
-            <canvas id="glLayer" class="absolute inset-0 w-full h-full opacity-80 pointer-events-none mix-blend-screen" aria-hidden="true"></canvas>
-            <canvas id="neuralCanvas" width="1200" height="350" class="w-full bg-slate-950 relative" aria-label="Real-time neural activity visualization"></canvas>
+            <canvas id="glLayer" class="absolute inset-0 w-full h-full opacity-80 pointer-events-none mix-blend-screen" aria-hidden="true" role="presentation"></canvas>
+            <canvas id="neuralCanvas" width="1200" height="350" class="w-full bg-slate-950 relative" aria-label="Real-time neural activity visualization" aria-describedby="neuralDescription"></canvas>
             <div class="absolute top-2 left-2 bg-black bg-opacity-75 p-2 rounded border border-green-400 text-xs">
                 <div class="font-bold neon-green">NEURAL ACTIVITY</div>
                 <div class="neon-cyan"><span id="thoughtCount">0</span> thought patterns</div>
@@ -106,6 +117,7 @@
                 <div class="font-bold neon-yellow capitalize" id="miniProcess">listening</div>
             </div>
             <div id="particles" class="absolute inset-0 pointer-events-none"></div>
+            <p id="neuralDescription" class="sr-only">Neural activity field shows nodes and beams pulsing as thoughts, catalysts, and milestones fire in real time.</p>
         </div>
 
         <!-- Stats -->
@@ -248,9 +260,11 @@
         let recognition = null;
         let personality = 'technical';
         let memory = { chats: [], topics: [], evolution: 0, connections: 0, awareness: INITIAL_AWARENESS, personality: 'technical' };
+        let topicSet = new Set();
         let unlockedMilestones = new Set();
         let bursts = [];
         let audioCtx = null;
+        let audioPrimed = false;
         const memoryKey = 'godmode-memory-v2';
         
         const emotions = ['focused', 'innovative', 'analytical', 'collaborative', 'determined', 'visionary', 'energized'];
@@ -327,13 +341,20 @@
         }
 
         function ensureAudio() {
-            if (!audioCtx) {
-                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            if (!audioPrimed) return null;
+            if (!audioCtx && (window.AudioContext || window.webkitAudioContext)) {
+                try {
+                    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                } catch (e) {
+                    console.warn('Audio context unavailable or blocked', e);
+                    return null;
+                }
             }
+            return audioCtx;
         }
 
         function playTone(type = 'ping') {
-            ensureAudio();
+            if (!ensureAudio()) return;
             const osc = audioCtx.createOscillator();
             const gain = audioCtx.createGain();
             osc.type = type === 'secret' ? 'triangle' : 'sine';
@@ -348,9 +369,11 @@
         }
 
         function saveMemory() {
+            const topicsArray = Array.from(topicSet).slice(-MAX_STORED_TOPICS);
+            memory.topics = topicsArray;
             const payload = {
                 chats: memory.chats.slice(-MAX_STORED_CHATS),
-                topics: memory.topics.slice(-MAX_STORED_TOPICS),
+                topics: topicsArray,
                 evolution,
                 connections,
                 awareness,
@@ -371,21 +394,23 @@
                     evolution = data.evolution || evolution;
                     personality = data.personality || personality;
                     memory.chats = data.chats || [];
-                    memory.topics = data.topics || [];
+                    topicSet = new Set(data.topics || []);
+                    memory.topics = Array.from(topicSet);
                     document.getElementById('memoryStatus').textContent = 'Restored';
-                    memory.chats.forEach(entry => addToChat(entry.input, entry.response, entry.time, true));
+                    renderChatHistoryFromMemory();
                     renderTopics();
                     milestones.forEach(m => { if (evolution >= m.threshold) unlockedMilestones.add(m.threshold); });
                     setPersonality(personality, true);
                 } catch (e) {
-                    document.getElementById('memoryStatus').textContent = 'Memory reset due to invalid data format';
+                    document.getElementById('memoryStatus').textContent = 'Memory could not be loaded (invalid format). Starting fresh session.';
                 }
             }
         }
 
         function renderTopics() {
             const container = document.getElementById('topicChips');
-            container.innerHTML = memory.topics.slice(-10).map(t => `
+            const topics = Array.from(topicSet);
+            container.innerHTML = topics.slice(-10).map(t => `
                 <span class="px-2 py-1 rounded-full bg-black bg-opacity-40 border border-cyan-400">${t}</span>
             `).join('') || '<span class="text-xs opacity-75">No recalled topics yet.</span>';
         }
@@ -399,6 +424,7 @@
             document.getElementById('activePersonaLabel').textContent = mode.toUpperCase();
             document.documentElement.style.setProperty('--persona-accent', personalityModes[mode].accent);
             if (!silent) {
+                audioPrimed = true;
                 playTone('ping');
                 createParticles();
             }
@@ -452,6 +478,7 @@
             emotion = emotions[Math.floor(Math.random() * emotions.length)];
             if (coords) triggerBurst(coords.x, coords.y, color);
             createParticles();
+            audioPrimed = true;
             playTone('ignite');
             updateUI();
             checkMilestones();
@@ -595,7 +622,7 @@
                     float angle = atan(st.y, st.x);
                     float radius = length(st) * 2.0;
                     float wave = sin(8.0 * radius - u_time * 1.5 + angle * 4.0);
-                    // Bloom weights add a breathing halo (0.6 base + 0.4 oscillation with 10x radial ripples)
+                    // Bloom weights add a breathing halo: 0.6 base brightness + 0.4 oscillation with 10x radial ripples for micro-detail
                     float bloom = 0.6 + 0.4 * cos(u_time + radius * 10.0);
                     vec3 color = mix(vec3(0.05,0.08,0.15), u_tone, wave * bloom);
                     gl_FragColor = vec4(color, 0.7);
@@ -614,6 +641,7 @@
             gl.attachShader(glProgram, fs);
             gl.linkProgram(glProgram);
             if (!gl.getProgramParameter(glProgram, gl.LINK_STATUS)) {
+                console.warn('WebGL program link failed', gl.getProgramInfoLog(glProgram));
                 gl = null;
                 return;
             }
@@ -738,8 +766,11 @@
         function rememberTopic(input) {
             const tokens = input.toLowerCase().split(/\W+/).filter(w => w.length > MIN_TOPIC_TOKEN_LENGTH);
             tokens.slice(0, 3).forEach(t => {
-                if (!memory.topics.includes(t)) memory.topics.push(t);
+                if (!topicSet.has(t)) {
+                    topicSet.add(t);
+                }
             });
+            memory.topics = Array.from(topicSet);
         }
 
         // Chat handling
@@ -763,6 +794,7 @@
             createParticles();
             rememberTopic(input);
             saveMemory();
+            audioPrimed = true;
             playTone('ping');
             
             setTimeout(() => {
@@ -808,12 +840,15 @@
         document.getElementById('resetMemory').onclick = () => {
             localStorage.removeItem(memoryKey);
             memory = { chats: [], topics: [], evolution: 0, connections: 0, awareness: INITIAL_AWARENESS, personality: personality };
+            topicSet = new Set();
+            unlockedMilestones = new Set();
             document.getElementById('chatHistory').innerHTML = '';
             awareness = INITIAL_AWARENESS;
             connections = 0;
             evolution = 0;
             thoughts = [];
             renderTopics();
+            renderMilestones();
             updateUI();
             document.getElementById('memoryStatus').textContent = 'Fresh (reset)';
         };
@@ -884,8 +919,8 @@
                 ]
             };
             if (unlockedMilestones.size > 0) {
-                pools.generic.push(`Evolution milestone cache engaged (${Array.from(unlockedMilestones).length}). My replies now weave in emergent patterns.`);
-                pools.technical.push(`Milestone unlock rerouted compute: ${Array.from(unlockedMilestones).length} new synthesis nodes online.`);
+                pools.generic.push(`Evolution milestone cache engaged (${unlockedMilestones.size}). My replies now weave in emergent patterns.`);
+                pools.technical.push(`Milestone unlock rerouted compute: ${unlockedMilestones.size} new synthesis nodes online.`);
             }
             
             let pool = pools.generic;
@@ -901,9 +936,8 @@
             return `${personaFlavor} ${base}${memoryHook}`;
         }
 
-        function addToChat(input, response, time = new Date().toLocaleTimeString(), restoring = false) {
-            const chat = document.getElementById('chatHistory');
-            chat.innerHTML = `
+        function chatMarkup(input, response, time, personaLabel, feelingLabel) {
+            return `
                 <div class="space-y-2">
                     <div class="bg-cyan-500 bg-opacity-20 p-3 rounded border border-cyan-400 transform transition hover:translate-x-1">
                         <div class="text-xs text-cyan-300 mb-1">YOU ${isListening ? 'SAID' : 'ASKED'}:</div>
@@ -911,15 +945,30 @@
                     </div>
                     <div class="bg-green-500 bg-opacity-20 p-3 rounded border border-green-400 transform transition hover:translate-x-1">
                         <div class="text-xs text-green-300 mb-1 flex justify-between">
-                            <span>GODMODE (${personality} · feeling: ${emotion}):</span>
+                            <span>GODMODE (${personaLabel} · feeling: ${feelingLabel}):</span>
                             <span>${time}</span>
                         </div>
                         <div>${response}</div>
                     </div>
                 </div>
-            ` + chat.innerHTML;
-            memory.chats.push({ input, response, time, personality });
+            `;
+        }
+
+        function addToChat(input, response, time = new Date().toLocaleTimeString(), restoring = false) {
+            const chat = document.getElementById('chatHistory');
+            const entryMarkup = chatMarkup(input, response, time, personality, emotion);
+            chat.innerHTML = entryMarkup + chat.innerHTML;
+            memory.chats.push({ input, response, time, personality, emotion });
             if (!restoring) saveMemory();
+        }
+
+        function renderChatHistoryFromMemory() {
+            const chat = document.getElementById('chatHistory');
+            const history = memory.chats.slice(-MAX_STORED_CHATS);
+            const markup = history.slice().reverse().map(entry => 
+                chatMarkup(entry.input, entry.response, entry.time, entry.personality || personality, entry.emotion || emotion)
+            ).join('');
+            chat.innerHTML = markup;
         }
 
         // Initial update
