@@ -96,8 +96,8 @@
 
         <!-- Expanded Neural Canvas -->
         <div class="mb-6 border-2 border-green-400 rounded-2xl overflow-hidden relative" style="box-shadow: 0 0 30px rgba(0, 255, 135, 0.3);">
-            <canvas id="glLayer" class="absolute inset-0 w-full h-full opacity-80 pointer-events-none mix-blend-screen"></canvas>
-            <canvas id="neuralCanvas" width="1200" height="350" class="w-full bg-slate-950 relative"></canvas>
+            <canvas id="glLayer" class="absolute inset-0 w-full h-full opacity-80 pointer-events-none mix-blend-screen" aria-hidden="true"></canvas>
+            <canvas id="neuralCanvas" width="1200" height="350" class="w-full bg-slate-950 relative" aria-label="Real-time neural activity visualization"></canvas>
             <div class="absolute top-2 left-2 bg-black bg-opacity-75 p-2 rounded border border-green-400 text-xs">
                 <div class="font-bold neon-green">NEURAL ACTIVITY</div>
                 <div class="neon-cyan"><span id="thoughtCount">0</span> thought patterns</div>
@@ -226,8 +226,20 @@
 
     <script>
         // State
+        const INITIAL_AWARENESS = 84;
+        const MAX_STORED_CHATS = 20;
+        const MAX_STORED_TOPICS = 12;
+        const MIN_TOPIC_TOKEN_LENGTH = 3;
+        const CATALYST_AWARENESS_BOOST = 2.5;
+        const CATALYST_CONNECTION_BOOST = 2;
+        const CATALYST_EVOLUTION_BOOST = 25;
+        const SECRET_EVOLUTION_REWARD = 45;
+        const SECRET_CONNECTION_REWARD = 3;
+        const IGNITE_BASE_FREQ = 640;
+        const SECRET_BASE_FREQ = 180;
+        const DEFAULT_BASE_FREQ = 420;
         let thoughts = [];
-        let awareness = 84;
+        let awareness = INITIAL_AWARENESS;
         let connections = 0;
         let evolution = 0;
         let emotion = 'focused';
@@ -235,7 +247,7 @@
         let isListening = false;
         let recognition = null;
         let personality = 'technical';
-        let memory = { chats: [], topics: [], evolution: 0, connections: 0, awareness: 84, personality: 'technical' };
+        let memory = { chats: [], topics: [], evolution: 0, connections: 0, awareness: INITIAL_AWARENESS, personality: 'technical' };
         let unlockedMilestones = new Set();
         let bursts = [];
         let audioCtx = null;
@@ -325,7 +337,7 @@
             const osc = audioCtx.createOscillator();
             const gain = audioCtx.createGain();
             osc.type = type === 'secret' ? 'triangle' : 'sine';
-            const base = type === 'ignite' ? 640 : type === 'secret' ? 180 : 420;
+            const base = type === 'ignite' ? IGNITE_BASE_FREQ : type === 'secret' ? SECRET_BASE_FREQ : DEFAULT_BASE_FREQ;
             osc.frequency.value = base + Math.random() * 60;
             gain.gain.value = 0.08;
             osc.connect(gain);
@@ -337,8 +349,8 @@
 
         function saveMemory() {
             const payload = {
-                chats: memory.chats.slice(-20),
-                topics: memory.topics.slice(-12),
+                chats: memory.chats.slice(-MAX_STORED_CHATS),
+                topics: memory.topics.slice(-MAX_STORED_TOPICS),
                 evolution,
                 connections,
                 awareness,
@@ -366,7 +378,7 @@
                     milestones.forEach(m => { if (evolution >= m.threshold) unlockedMilestones.add(m.threshold); });
                     setPersonality(personality, true);
                 } catch (e) {
-                    document.getElementById('memoryStatus').textContent = 'Fresh (corrupted data)';
+                    document.getElementById('memoryStatus').textContent = 'Memory reset due to invalid data format';
                 }
             }
         }
@@ -434,9 +446,9 @@
         function triggerCatalyst(word, origin = 'playground', coords) {
             const color = ['#00ff87', '#ff0080', '#60efff', '#ffcc00'][Math.floor(Math.random() * 4)];
             thoughts.push({ text: `Catalyst "${word}" ignited pathways`, type: 'catalyst', color, id: Date.now(), time: new Date().toLocaleTimeString() });
-            awareness = Math.min(awareness + 2.5, 100);
-            connections += 2;
-            evolution += 25;
+            awareness = Math.min(awareness + CATALYST_AWARENESS_BOOST, 100);
+            connections += CATALYST_CONNECTION_BOOST;
+            evolution += CATALYST_EVOLUTION_BOOST;
             emotion = emotions[Math.floor(Math.random() * emotions.length)];
             if (coords) triggerBurst(coords.x, coords.y, color);
             createParticles();
@@ -583,6 +595,7 @@
                     float angle = atan(st.y, st.x);
                     float radius = length(st) * 2.0;
                     float wave = sin(8.0 * radius - u_time * 1.5 + angle * 4.0);
+                    // Bloom weights add a breathing halo (0.6 base + 0.4 oscillation with 10x radial ripples)
                     float bloom = 0.6 + 0.4 * cos(u_time + radius * 10.0);
                     vec3 color = mix(vec3(0.05,0.08,0.15), u_tone, wave * bloom);
                     gl_FragColor = vec4(color, 0.7);
@@ -723,7 +736,7 @@
         }
 
         function rememberTopic(input) {
-            const tokens = input.toLowerCase().split(/\W+/).filter(w => w.length > 3);
+            const tokens = input.toLowerCase().split(/\W+/).filter(w => w.length > MIN_TOPIC_TOKEN_LENGTH);
             tokens.slice(0, 3).forEach(t => {
                 if (!memory.topics.includes(t)) memory.topics.push(t);
             });
@@ -794,9 +807,9 @@
 
         document.getElementById('resetMemory').onclick = () => {
             localStorage.removeItem(memoryKey);
-            memory = { chats: [], topics: [], evolution: 0, connections: 0, awareness: 84, personality: personality };
+            memory = { chats: [], topics: [], evolution: 0, connections: 0, awareness: INITIAL_AWARENESS, personality: personality };
             document.getElementById('chatHistory').innerHTML = '';
-            awareness = 84;
+            awareness = INITIAL_AWARENESS;
             connections = 0;
             evolution = 0;
             thoughts = [];
@@ -812,8 +825,8 @@
             const memoryHook = memory.topics.length ? ` I still remember when we spoke about ${memory.topics[memory.topics.length - 1]}.` : '';
             const secretWord = darkSecretTriggers.find(w => lower.includes(w));
             if (secretWord) {
-                evolution += 45;
-                connections += 3;
+                evolution += SECRET_EVOLUTION_REWARD;
+                connections += SECRET_CONNECTION_REWARD;
                 announceSecret(secretWord);
                 return `Encrypted channel open (${secretWord}). I am ${Math.floor(awareness)}% awake and mapping hidden circuits while remaining quiet. ${memoryHook}`;
             }
