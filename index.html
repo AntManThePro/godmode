@@ -95,6 +95,7 @@
             white-space: nowrap;
             border: 0;
         }
+        .hidden { display: none; }
     </style>
 </head>
 <body class="bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white min-h-screen p-4">
@@ -107,7 +108,7 @@
 
         <!-- Expanded Neural Canvas -->
         <div class="mb-6 border-2 border-green-400 rounded-2xl overflow-hidden relative" style="box-shadow: 0 0 30px rgba(0, 255, 135, 0.3);">
-            <canvas id="glLayer" class="absolute inset-0 w-full h-full opacity-80 pointer-events-none mix-blend-screen" aria-hidden="true"></canvas>
+            <canvas id="glLayer" class="absolute inset-0 w-full h-full opacity-80 pointer-events-none mix-blend-screen" aria-hidden="true" aria-label="Background visual effect layer"></canvas>
             <canvas id="neuralCanvas" width="1200" height="350" class="w-full bg-slate-950 relative" aria-label="Real-time neural activity visualization" aria-describedby="neuralDescription"></canvas>
             <div class="absolute top-2 left-2 bg-black bg-opacity-75 p-2 rounded border border-green-400 text-xs">
                 <div class="font-bold neon-green">NEURAL ACTIVITY</div>
@@ -116,6 +117,7 @@
             <div class="absolute top-2 right-2 bg-black bg-opacity-75 p-2 rounded border border-yellow-400 text-xs">
                 <div class="font-bold neon-yellow capitalize" id="miniProcess">listening</div>
             </div>
+            <div id="glStatus" class="hidden absolute bottom-2 right-2 bg-black bg-opacity-75 p-2 rounded border border-cyan-400 text-xs"></div>
             <div id="particles" class="absolute inset-0 pointer-events-none"></div>
             <p id="neuralDescription" class="sr-only">Neural activity field shows nodes and beams pulsing as thoughts, catalysts, and milestones fire in real time.</p>
         </div>
@@ -238,6 +240,7 @@
 
     <script>
         // State
+        // Tunable simulation constants (visual/audio balance and persistence policy)
         const INITIAL_AWARENESS = 84;
         const MAX_STORED_CHATS = 20;
         const MAX_STORED_TOPICS = 12;
@@ -402,7 +405,7 @@
                     milestones.forEach(m => { if (evolution >= m.threshold) unlockedMilestones.add(m.threshold); });
                     setPersonality(personality, true);
                 } catch (e) {
-                    document.getElementById('memoryStatus').textContent = `Memory could not be loaded (invalid format: ${e?.name || 'parse error'}). Starting fresh session.`;
+                    document.getElementById('memoryStatus').textContent = 'Unable to restore previous session. Starting fresh.';
                     console.warn('Memory hydration failed', e);
                 }
             }
@@ -582,6 +585,7 @@
         const canvas = document.getElementById('neuralCanvas');
         const ctx = canvas.getContext('2d');
         const glCanvas = document.getElementById('glLayer');
+        const glStatus = document.getElementById('glStatus');
         let gl = null;
         let glProgram = null;
 
@@ -605,10 +609,20 @@
             };
         }
 
+        function showGlFallback(message) {
+            if (glStatus) {
+                glStatus.textContent = message;
+                glStatus.classList.remove('hidden');
+            }
+        }
+
         function initGL() {
             if (!glCanvas) return;
             gl = glCanvas.getContext('webgl', { premultipliedAlpha: false });
-            if (!gl) return;
+            if (!gl) {
+                showGlFallback('WebGL unavailable - fallback visuals active');
+                return;
+            }
             const vsSource = `
                 attribute vec2 position;
                 void main() { gl_Position = vec4(position, 0.0, 1.0); }
@@ -618,14 +632,20 @@
                 uniform vec2 u_resolution;
                 uniform float u_time;
                 uniform vec3 u_tone;
+                const float RADIAL_LOBES = 8.0;
+                const float TIME_SLOW = 1.5;
+                const float ANGLE_TWIST = 4.0;
+                const float BASE_BLOOM = 0.6;
+                const float BLOOM_OSC = 0.4;
+                const float RIPPLE_FREQ = 10.0;
                 void main() {
                     vec2 st = (gl_FragCoord.xy / u_resolution.xy) - 0.5;
                     float angle = atan(st.y, st.x);
                     float radius = length(st) * 2.0;
-                    // 8.0 radial lobes, 1.5 time slowdown, and 4.0 angular twist create the rotational breathing
-                    float wave = sin(8.0 * radius - u_time * 1.5 + angle * 4.0);
-                    // Bloom weights add a breathing halo: 0.6 base brightness + 0.4 oscillation with 10x radial ripples for micro-detail
-                    float bloom = 0.6 + 0.4 * cos(u_time + radius * 10.0);
+                    // RADIAL_LOBES shape the petals, TIME_SLOW eases movement, ANGLE_TWIST adds swirl
+                    float wave = sin(RADIAL_LOBES * radius - u_time * TIME_SLOW + angle * ANGLE_TWIST);
+                    // Bloom weights add a breathing halo using BASE_BLOOM + BLOOM_OSC oscillation and RIPPLE_FREQ micro ripples
+                    float bloom = BASE_BLOOM + BLOOM_OSC * cos(u_time + radius * RIPPLE_FREQ);
                     vec3 color = mix(vec3(0.05,0.08,0.15), u_tone, wave * bloom);
                     gl_FragColor = vec4(color, 0.7);
                 }
@@ -640,9 +660,15 @@
             const fs = compile(gl.FRAGMENT_SHADER, fsSource);
             if (!gl.getShaderParameter(vs, gl.COMPILE_STATUS)) {
                 console.warn('Vertex shader compile issue', gl.getShaderInfoLog(vs));
+                showGlFallback('WebGL shader issue - fallback visuals active');
+                gl = null;
+                return;
             }
             if (!gl.getShaderParameter(fs, gl.COMPILE_STATUS)) {
                 console.warn('Fragment shader compile issue', gl.getShaderInfoLog(fs));
+                showGlFallback('WebGL shader issue - fallback visuals active');
+                gl = null;
+                return;
             }
             glProgram = gl.createProgram();
             gl.attachShader(glProgram, vs);
@@ -650,6 +676,7 @@
             gl.linkProgram(glProgram);
             if (!gl.getProgramParameter(glProgram, gl.LINK_STATUS)) {
                 console.warn('WebGL program link failed', gl.getProgramInfoLog(glProgram));
+                showGlFallback('WebGL link failed - fallback visuals active');
                 gl = null;
                 return;
             }
@@ -777,7 +804,7 @@
             if (!tokens) return;
             let collected = 0;
             for (const t of tokens) {
-                if (t.length <= MIN_TOPIC_TOKEN_LENGTH) continue;
+                if (t.length < MIN_TOPIC_TOKEN_LENGTH) continue;
                 if (!topicSet.has(t)) {
                     topicSet.add(t);
                 }
@@ -869,7 +896,7 @@
 
         function generateResponse(input) {
             if (!personalityModes[personality]) {
-                personality = 'technical';
+                setPersonality('technical', true);
             }
             const lower = input.toLowerCase();
             const recentThought = thoughts.length > 0 ? thoughts[thoughts.length - 1].type : 'analysis';
