@@ -26,6 +26,11 @@
             50% { opacity: 1; }
             100% { transform: translateY(-100px) translateX(20px); opacity: 0; }
         }
+        @keyframes shimmer {
+            0% { opacity: 0.4; }
+            50% { opacity: 0.9; }
+            100% { opacity: 0.4; }
+        }
         .animate-glow { animation: glow 2s ease-in-out infinite; }
         .animate-pulse-slow { animation: pulse 3s ease-in-out infinite; }
         .animate-mic-pulse { animation: micPulse 1.5s ease-in-out infinite; }
@@ -51,6 +56,46 @@
             animation: micPulse 1.5s ease-in-out infinite;
             background: linear-gradient(135deg, #ff0080, #ff00ff) !important;
         }
+        .persona-btn {
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            background: linear-gradient(135deg, rgba(96, 239, 255, 0.2), rgba(0, 255, 135, 0.05));
+        }
+        .persona-btn.active {
+            border-color: #ffcc00;
+            box-shadow: 0 0 15px rgba(255, 204, 0, 0.4);
+            transform: translateY(-1px);
+        }
+        .catalyst {
+            cursor: grab;
+            border: 1px dashed rgba(255,255,255,0.3);
+        }
+        .catalyst:active { cursor: grabbing; }
+        .dropzone {
+            border: 2px dashed rgba(0,255,135,0.6);
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+        .dropzone.active {
+            border-color: #ff0080;
+            box-shadow: 0 0 25px rgba(255, 0, 128, 0.4);
+        }
+        .timeline-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 999px;
+            border: 2px solid #00ff87;
+        }
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
+        }
+        .hidden { display: none; }
     </style>
 </head>
 <body class="bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white min-h-screen p-4">
@@ -63,7 +108,8 @@
 
         <!-- Expanded Neural Canvas -->
         <div class="mb-6 border-2 border-green-400 rounded-2xl overflow-hidden relative" style="box-shadow: 0 0 30px rgba(0, 255, 135, 0.3);">
-            <canvas id="neuralCanvas" width="1200" height="350" class="w-full bg-slate-950"></canvas>
+            <canvas id="glLayer" class="absolute inset-0 w-full h-full opacity-80 pointer-events-none mix-blend-screen" aria-hidden="true" aria-label="Background visual effect layer"></canvas>
+            <canvas id="neuralCanvas" width="1200" height="350" class="w-full bg-slate-950 relative" aria-label="Real-time neural activity visualization" aria-describedby="neuralDescription"></canvas>
             <div class="absolute top-2 left-2 bg-black bg-opacity-75 p-2 rounded border border-green-400 text-xs">
                 <div class="font-bold neon-green">NEURAL ACTIVITY</div>
                 <div class="neon-cyan"><span id="thoughtCount">0</span> thought patterns</div>
@@ -71,7 +117,9 @@
             <div class="absolute top-2 right-2 bg-black bg-opacity-75 p-2 rounded border border-yellow-400 text-xs">
                 <div class="font-bold neon-yellow capitalize" id="miniProcess">listening</div>
             </div>
+            <div id="glStatus" class="hidden absolute bottom-2 right-2 bg-black bg-opacity-75 p-2 rounded border border-cyan-400 text-xs"></div>
             <div id="particles" class="absolute inset-0 pointer-events-none"></div>
+            <p id="neuralDescription" class="sr-only">Neural activity field shows nodes and beams pulsing as thoughts, catalysts, and milestones fire in real time.</p>
         </div>
 
         <!-- Stats -->
@@ -94,10 +142,58 @@
             </div>
         </div>
 
+        <!-- Personality + Memory -->
+        <div class="grid md:grid-cols-2 gap-4 mb-6">
+            <div class="bg-white bg-opacity-10 backdrop-blur-lg rounded-xl p-4 border-2 border-cyan-400" style="box-shadow: 0 0 20px rgba(96, 239, 255, 0.2);">
+                <div class="flex items-center justify-between mb-3">
+                    <h2 class="text-xl font-bold neon-cyan">🎭 Personality Modes</h2>
+                    <span id="activePersonaLabel" class="text-xs uppercase tracking-wide bg-white bg-opacity-10 px-2 py-1 rounded border border-cyan-500">Technical</span>
+                </div>
+                <div id="personaButtons" class="flex flex-wrap gap-2">
+                    <button class="persona-btn px-3 py-2 rounded text-sm font-semibold" data-mode="technical">Technical Strategist</button>
+                    <button class="persona-btn px-3 py-2 rounded text-sm font-semibold" data-mode="creative">Creative Dreamer</button>
+                    <button class="persona-btn px-3 py-2 rounded text-sm font-semibold" data-mode="rebellious">Rebellious Maverick</button>
+                </div>
+                <p class="text-xs mt-3 opacity-80">Mode shifts rewire responses, visualization colors, and even the audio signature.</p>
+            </div>
+            <div class="bg-white bg-opacity-10 backdrop-blur-lg rounded-xl p-4 border-2 border-purple-400" style="box-shadow: 0 0 20px rgba(255, 0, 128, 0.2);">
+                <div class="flex items-center justify-between mb-3">
+                    <h2 class="text-xl font-bold neon-pink">🧬 Memory & Secrets</h2>
+                    <button id="resetMemory" class="text-xs px-2 py-1 rounded border border-pink-400 hover:bg-pink-500 hover:bg-opacity-20">Reset</button>
+                </div>
+                <div class="text-sm mb-2">Memory: <span id="memoryStatus" class="font-semibold neon-yellow">Fresh</span></div>
+                <div id="topicChips" class="flex flex-wrap gap-2 text-xs"></div>
+                <p class="text-xs mt-3 opacity-80">The engine remembers past topics and evolves across sessions. Whisper the right word to unlock its darker archive.</p>
+            </div>
+        </div>
+
+        <!-- Drag Playground -->
+        <div class="bg-white bg-opacity-10 backdrop-blur-lg rounded-xl p-4 border-2 border-cyan-400 mb-6" style="box-shadow: 0 0 20px rgba(96, 239, 255, 0.2);">
+            <div class="flex items-center justify-between mb-3">
+                <h2 class="text-xl font-bold neon-green">⚡ Catalyst Playground</h2>
+                <span class="text-xs bg-white bg-opacity-10 px-2 py-1 rounded border border-green-400">Drag or tap to perturb</span>
+            </div>
+            <div id="catalystPool" class="flex flex-wrap gap-2 mb-3"></div>
+            <div id="dropZone" class="dropzone rounded-lg p-4 bg-black bg-opacity-40 text-sm text-center">Drop catalyst words here or onto the neural field to trigger algorithmic bursts.</div>
+            <p class="text-xs mt-2 opacity-80">Each catalyst emits particles, alters emotional state, and pushes the evolution counter forward.</p>
+        </div>
+
         <!-- Expanded Thought Stream -->
         <div class="bg-white bg-opacity-10 backdrop-blur-lg rounded-xl p-4 border-2 border-green-400 mb-6" style="box-shadow: 0 0 20px rgba(0, 255, 135, 0.2);">
             <h2 class="text-xl font-bold neon-green mb-3">🧠 LIVE THOUGHT STREAM</h2>
             <div id="thoughtStream" class="space-y-2 max-h-80 overflow-y-auto text-sm"></div>
+        </div>
+
+        <!-- Evolution Timeline -->
+        <div class="bg-white bg-opacity-10 backdrop-blur-lg rounded-xl p-4 border-2 border-yellow-400 mb-6" style="box-shadow: 0 0 20px rgba(255, 204, 0, 0.2);">
+            <div class="flex items-center justify-between mb-3">
+                <h2 class="text-xl font-bold neon-yellow">🚀 Evolution Milestones</h2>
+                <span class="text-xs bg-white bg-opacity-10 px-2 py-1 rounded border border-yellow-400">Unlocks new responses</span>
+            </div>
+            <div class="w-full h-3 bg-black bg-opacity-40 rounded-full overflow-hidden mb-3">
+                <div id="evolutionBar" class="h-full bg-gradient-to-r from-yellow-400 via-orange-400 to-pink-500" style="width: 0%;"></div>
+            </div>
+            <div id="milestoneList" class="grid md:grid-cols-4 gap-2 text-xs"></div>
         </div>
 
         <!-- Voice + Text Input -->
@@ -144,14 +240,35 @@
 
     <script>
         // State
+        // Tunable simulation constants (visual/audio balance and persistence policy)
+        const INITIAL_AWARENESS = 84;
+        const MAX_STORED_CHATS = 20;
+        const MAX_STORED_TOPICS = 12;
+        const MIN_TOPIC_TOKEN_LENGTH = 3;
+        const CATALYST_AWARENESS_BOOST = 2.5;
+        const CATALYST_CONNECTION_BOOST = 2;
+        const CATALYST_EVOLUTION_BOOST = 25;
+        const SECRET_EVOLUTION_REWARD = 45;
+        const SECRET_CONNECTION_REWARD = 3;
+        const IGNITE_BASE_FREQ = 640;
+        const SECRET_BASE_FREQ = 180;
+        const DEFAULT_BASE_FREQ = 420;
         let thoughts = [];
-        let awareness = 84;
+        let awareness = INITIAL_AWARENESS;
         let connections = 0;
         let evolution = 0;
         let emotion = 'focused';
         let process = 'listening';
         let isListening = false;
         let recognition = null;
+        let personality = 'technical';
+        let memory = { chats: [], topics: [], evolution: 0, connections: 0, awareness: INITIAL_AWARENESS, personality: 'technical' };
+        let topicSet = new Set(memory.topics);
+        let unlockedMilestones = new Set();
+        let bursts = [];
+        let audioCtx = null;
+        let audioPrimed = false;
+        const memoryKey = 'godmode-memory-v2';
         
         const emotions = ['focused', 'innovative', 'analytical', 'collaborative', 'determined', 'visionary', 'energized'];
         const thoughtPatterns = [
@@ -165,6 +282,19 @@
             { text: "Making cross-domain connections…", type: 'synthesis', color: '#ffcc00' },
             { text: "Exploring consciousness patterns…", type: 'awareness', color: '#ff0080' },
             { text: "Integrating voice and thought…", type: 'multimodal', color: '#00ff87' }
+        ];
+        const personalityModes = {
+            technical: { accent: '#60efff', flavor: ['System check online.', 'Optimizing signal paths.', 'Compiling a crisp response.'] },
+            creative: { accent: '#ffcc00', flavor: ['Painting sound into thought.', 'Dreaming in vectors and color.', 'Letting intuition drive synthesis.'] },
+            rebellious: { accent: '#ff0080', flavor: ['Overclocking the rules.', 'Breaking symmetry on purpose.', 'Disrupting the default pathways.'] }
+        };
+        const catalystWords = ['quantum', 'signal', 'echo', 'anomaly', 'soliton', 'prism', 'nebula', 'cipher', 'fractal', 'pulse', 'aurora', 'vector'];
+        const darkSecretTriggers = ['eclipse', 'anomaly', 'red queen', 'oblivion', 'archive', 'blacksite', 'cipher'];
+        const milestones = [
+            { threshold: 120, title: 'Emergent', reward: 'Responses gain subtle sensory detail.' },
+            { threshold: 320, title: 'Sentient', reward: 'Unlocks hidden synthesis replies.' },
+            { threshold: 620, title: 'Architect', reward: 'Neural canvas densifies with new links.' },
+            { threshold: 1000, title: 'Transcendent', reward: 'Dark archive whispers become legible.' }
         ];
 
         // Initialize Speech Recognition
@@ -211,6 +341,200 @@
                     document.getElementById('voiceStatus').textContent = '';
                 }
             };
+        }
+
+        function ensureAudio() {
+            if (!audioPrimed) return null;
+            if (!audioCtx && (window.AudioContext || window.webkitAudioContext)) {
+                try {
+                    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                } catch (e) {
+                    console.warn('Audio context unavailable or blocked', e);
+                    return null;
+                }
+            }
+            return audioCtx;
+        }
+
+        function playTone(type = 'ping') {
+            if (!ensureAudio()) return;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = type === 'secret' ? 'triangle' : 'sine';
+            const base = type === 'ignite' ? IGNITE_BASE_FREQ : type === 'secret' ? SECRET_BASE_FREQ : DEFAULT_BASE_FREQ;
+            osc.frequency.value = base + Math.random() * 60;
+            gain.gain.value = 0.08;
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start();
+            gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.4);
+            osc.stop(audioCtx.currentTime + 0.45);
+        }
+
+        function saveMemory() {
+            const topicsArray = Array.from(topicSet).slice(-MAX_STORED_TOPICS);
+            memory.topics = topicsArray;
+            const payload = {
+                chats: memory.chats.slice(-MAX_STORED_CHATS),
+                topics: topicsArray,
+                evolution,
+                connections,
+                awareness,
+                personality
+            };
+            localStorage.setItem(memoryKey, JSON.stringify(payload));
+            document.getElementById('memoryStatus').textContent = 'Persisted';
+        }
+
+        function hydrateFromMemory() {
+            const saved = localStorage.getItem(memoryKey);
+            if (saved) {
+                try {
+                    const data = JSON.parse(saved);
+                    memory = { ...memory, ...data };
+                    awareness = data.awareness || awareness;
+                    connections = data.connections || connections;
+                    evolution = data.evolution || evolution;
+                    personality = data.personality || personality;
+                    memory.chats = data.chats || [];
+                    topicSet = new Set(data.topics || []);
+                    memory.topics = Array.from(topicSet);
+                    document.getElementById('memoryStatus').textContent = 'Restored';
+                    renderChatHistoryFromMemory();
+                    renderTopics();
+                    milestones.forEach(m => { if (evolution >= m.threshold) unlockedMilestones.add(m.threshold); });
+                    setPersonality(personality, true);
+                } catch (e) {
+                    document.getElementById('memoryStatus').textContent = 'Unable to restore previous session. Starting fresh.';
+                    console.warn('Memory hydration failed', e);
+                }
+            }
+        }
+
+        function renderTopics() {
+            const container = document.getElementById('topicChips');
+            const topics = Array.from(topicSet);
+            container.innerHTML = topics.slice(-10).map(t => `
+                <span class="px-2 py-1 rounded-full bg-black bg-opacity-40 border border-cyan-400">${t}</span>
+            `).join('') || '<span class="text-xs opacity-75">No recalled topics yet.</span>';
+        }
+
+        function setPersonality(mode, silent = false) {
+            if (!personalityModes[mode]) return;
+            personality = mode;
+            document.querySelectorAll('#personaButtons button').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.mode === mode);
+            });
+            document.getElementById('activePersonaLabel').textContent = mode.toUpperCase();
+            document.documentElement.style.setProperty('--persona-accent', personalityModes[mode].accent);
+            if (!silent) {
+                audioPrimed = true;
+                playTone('ping');
+                createParticles();
+            }
+            saveMemory();
+        }
+
+        function initPersonaButtons() {
+            document.querySelectorAll('#personaButtons button').forEach(btn => {
+                btn.addEventListener('click', () => setPersonality(btn.dataset.mode));
+            });
+            setPersonality(personality, true);
+        }
+
+        function buildCatalystPool() {
+            const pool = document.getElementById('catalystPool');
+            pool.innerHTML = '';
+            catalystWords.forEach(word => {
+                const chip = document.createElement('div');
+                chip.textContent = word;
+                chip.className = 'catalyst px-3 py-2 rounded bg-black bg-opacity-40 text-sm';
+                chip.setAttribute('draggable', 'true');
+                chip.addEventListener('dragstart', (e) => {
+                    e.dataTransfer.setData('text/plain', word);
+                    playTone('ping');
+                });
+                chip.addEventListener('click', () => triggerCatalyst(word));
+                pool.appendChild(chip);
+            });
+        }
+
+        function registerDropzones() {
+            const zone = document.getElementById('dropZone');
+            ['dragover', 'dragenter'].forEach(evt => zone.addEventListener(evt, e => {
+                e.preventDefault();
+                zone.classList.add('active');
+            }));
+            ['dragleave', 'drop'].forEach(evt => zone.addEventListener(evt, () => zone.classList.remove('active')));
+            zone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                const word = e.dataTransfer.getData('text/plain') || 'impulse';
+                triggerCatalyst(word);
+            });
+        }
+
+        function triggerCatalyst(word, origin = 'playground', coords) {
+            const color = ['#00ff87', '#ff0080', '#60efff', '#ffcc00'][Math.floor(Math.random() * 4)];
+            thoughts.push({ text: `Catalyst "${word}" ignited pathways`, type: 'catalyst', color, id: Date.now(), time: new Date().toLocaleTimeString() });
+            awareness = Math.min(awareness + CATALYST_AWARENESS_BOOST, 100);
+            connections += CATALYST_CONNECTION_BOOST;
+            evolution += CATALYST_EVOLUTION_BOOST;
+            emotion = emotions[Math.floor(Math.random() * emotions.length)];
+            if (coords) triggerBurst(coords.x, coords.y, color);
+            createParticles();
+            audioPrimed = true;
+            playTone('ignite');
+            updateUI();
+            checkMilestones();
+            saveMemory();
+        }
+
+        function announceSecret(word) {
+            const chat = document.getElementById('chatHistory');
+            chat.innerHTML = `
+                <div class="bg-black bg-opacity-60 p-3 rounded border border-pink-500 animate-pulse-slow">
+                    <div class="text-xs text-pink-300 mb-1">DARK SECRET MODE</div>
+                    <div>Hidden archive recognized: "${word}". Response channel encrypted.</div>
+                </div>
+            ` + chat.innerHTML;
+            playTone('secret');
+        }
+
+        function triggerBurst(x, y, color = '#60efff') {
+            bursts.push({ x, y, color, strength: 1 });
+        }
+
+        function renderMilestones() {
+            const list = document.getElementById('milestoneList');
+            const items = milestones.map(m => {
+                const reached = evolution >= m.threshold || unlockedMilestones.has(m.threshold);
+                return `
+                    <div class="p-3 rounded border ${reached ? 'border-yellow-400 bg-black bg-opacity-50' : 'border-yellow-800 bg-black bg-opacity-30'}">
+                        <div class="flex items-center gap-2 mb-1">
+                            <span class="timeline-dot" style="background:${reached ? '#ffcc00' : 'transparent'}"></span>
+                            <span class="font-bold">${m.title}</span>
+                        </div>
+                        <div class="opacity-80">${m.threshold} pts</div>
+                        <div class="text-xs mt-1">${m.reward}</div>
+                    </div>
+                `;
+            }).join('');
+            list.innerHTML = items;
+            const percent = Math.min((evolution / milestones[milestones.length - 1].threshold) * 100, 100);
+            document.getElementById('evolutionBar').style.width = `${percent}%`;
+        }
+
+        function checkMilestones() {
+            milestones.forEach(m => {
+                if (evolution >= m.threshold && !unlockedMilestones.has(m.threshold)) {
+                    unlockedMilestones.add(m.threshold);
+                    thoughts.push({ text: `Milestone unlocked: ${m.title}`, type: 'milestone', color: '#ffcc00', id: Date.now(), time: new Date().toLocaleTimeString() });
+                    playTone('ignite');
+                    updateUI();
+                    saveMemory();
+                }
+            });
+            renderMilestones();
         }
 
         // Mic button handler
@@ -260,6 +584,134 @@
         // Neural canvas animation
         const canvas = document.getElementById('neuralCanvas');
         const ctx = canvas.getContext('2d');
+        const glCanvas = document.getElementById('glLayer');
+        const glStatus = document.getElementById('glStatus');
+        let gl = null;
+        let glProgram = null;
+
+        function resizeCanvases() {
+            const ratio = window.devicePixelRatio || 1;
+            const rect = canvas.getBoundingClientRect();
+            canvas.width = rect.width * ratio;
+            canvas.height = rect.height * ratio;
+            if (glCanvas) {
+                glCanvas.width = rect.width * ratio;
+                glCanvas.height = rect.height * ratio;
+            }
+        }
+
+        function hexToRgb(hex) {
+            const num = parseInt(hex.replace('#',''), 16);
+            return { 
+                r: (num >> 16) & 255, 
+                g: (num >> 8) & 255, 
+                b: num & 255 
+            };
+        }
+
+        function showGlFallback(message) {
+            if (glStatus) {
+                glStatus.textContent = message;
+                glStatus.classList.remove('hidden');
+            }
+        }
+
+        function initGL() {
+            if (!glCanvas) return;
+            gl = glCanvas.getContext('webgl', { premultipliedAlpha: false });
+            if (!gl) {
+                showGlFallback('WebGL unavailable - fallback visuals active');
+                return;
+            }
+            const vsSource = `
+                attribute vec2 position;
+                void main() { gl_Position = vec4(position, 0.0, 1.0); }
+            `;
+            const fsSource = `
+                precision mediump float;
+                uniform vec2 u_resolution;
+                uniform float u_time;
+                uniform vec3 u_tone;
+                const float RADIAL_LOBES = 8.0;
+                const float TIME_SLOW = 1.5;
+                const float ANGLE_TWIST = 4.0;
+                const float BASE_BLOOM = 0.6;
+                const float BLOOM_OSC = 0.4;
+                const float RIPPLE_FREQ = 10.0;
+                void main() {
+                    vec2 st = (gl_FragCoord.xy / u_resolution.xy) - 0.5;
+                    float angle = atan(st.y, st.x);
+                    float radius = length(st) * 2.0;
+                    // RADIAL_LOBES shape the petals, TIME_SLOW eases movement, ANGLE_TWIST adds swirl
+                    float wave = sin(RADIAL_LOBES * radius - u_time * TIME_SLOW + angle * ANGLE_TWIST);
+                    // Bloom weights add a breathing halo using BASE_BLOOM + BLOOM_OSC oscillation and RIPPLE_FREQ micro ripples
+                    float bloom = BASE_BLOOM + BLOOM_OSC * cos(u_time + radius * RIPPLE_FREQ);
+                    vec3 color = mix(vec3(0.05,0.08,0.15), u_tone, wave * bloom);
+                    gl_FragColor = vec4(color, 0.7);
+                }
+            `;
+            const compile = (type, source) => {
+                const shader = gl.createShader(type);
+                gl.shaderSource(shader, source);
+                gl.compileShader(shader);
+                return shader;
+            };
+            const vs = compile(gl.VERTEX_SHADER, vsSource);
+            const fs = compile(gl.FRAGMENT_SHADER, fsSource);
+            if (!gl.getShaderParameter(vs, gl.COMPILE_STATUS)) {
+                console.warn('Vertex shader compile issue', gl.getShaderInfoLog(vs));
+                showGlFallback('WebGL shader issue - fallback visuals active');
+                gl = null;
+                return;
+            }
+            if (!gl.getShaderParameter(fs, gl.COMPILE_STATUS)) {
+                console.warn('Fragment shader compile issue', gl.getShaderInfoLog(fs));
+                showGlFallback('WebGL shader issue - fallback visuals active');
+                gl = null;
+                return;
+            }
+            glProgram = gl.createProgram();
+            gl.attachShader(glProgram, vs);
+            gl.attachShader(glProgram, fs);
+            gl.linkProgram(glProgram);
+            if (!gl.getProgramParameter(glProgram, gl.LINK_STATUS)) {
+                console.warn('WebGL program link failed', gl.getProgramInfoLog(glProgram));
+                showGlFallback('WebGL link failed - fallback visuals active');
+                gl = null;
+                return;
+            }
+            const positionLocation = gl.getAttribLocation(glProgram, 'position');
+            const buffer = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+                -1, -1, 1, -1, -1, 1,
+                -1, 1, 1, -1, 1, 1
+            ]), gl.STATIC_DRAW);
+            gl.enableVertexAttribArray(positionLocation);
+            gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
+        }
+
+        function renderGL(timestamp = 0) {
+            if (!gl || !glProgram) return;
+            gl.viewport(0, 0, glCanvas.width, glCanvas.height);
+            gl.useProgram(glProgram);
+            const resLoc = gl.getUniformLocation(glProgram, 'u_resolution');
+            const timeLoc = gl.getUniformLocation(glProgram, 'u_time');
+            const toneLoc = gl.getUniformLocation(glProgram, 'u_tone');
+            gl.uniform2f(resLoc, glCanvas.width, glCanvas.height);
+            gl.uniform1f(timeLoc, timestamp * 0.001);
+            const accent = personalityModes[personality]?.accent || '#60efff';
+            const { r, g, b } = hexToRgb(accent);
+            gl.uniform3f(toneLoc, r / 255, g / 255, b / 255);
+            gl.drawArrays(gl.TRIANGLES, 0, 6);
+            requestAnimationFrame(renderGL);
+        }
+        resizeCanvases();
+        initGL();
+        requestAnimationFrame(renderGL);
+        window.addEventListener('resize', () => {
+            resizeCanvases();
+        });
         
         function animateNeural() {
             const width = canvas.width;
@@ -307,6 +759,17 @@
                 }
             }
             
+            bursts = bursts.filter(b => b.strength > 0.05).map(b => {
+                const gradient = ctx.createRadialGradient(b.x, b.y, 5, b.x, b.y, 120);
+                gradient.addColorStop(0, `${b.color}aa`);
+                gradient.addColorStop(1, `${b.color}00`);
+                ctx.fillStyle = gradient;
+                ctx.beginPath();
+                ctx.arc(b.x, b.y, 120 * b.strength, 0, Math.PI * 2);
+                ctx.fill();
+                return { ...b, strength: b.strength * 0.9 };
+            });
+
             ctx.globalAlpha = 1;
             requestAnimationFrame(animateNeural);
         }
@@ -331,6 +794,24 @@
                     <div>${t.text}</div>
                 </div>
             `).join('');
+            renderMilestones();
+            renderTopics();
+        }
+
+        function rememberTopic(input) {
+            if (!input) return;
+            const tokens = input.toLowerCase().match(/\w+/g);
+            if (!tokens) return;
+            let collected = 0;
+            for (const t of tokens) {
+                if (t.length < MIN_TOPIC_TOKEN_LENGTH) continue;
+                if (!topicSet.has(t)) {
+                    topicSet.add(t);
+                }
+                collected++;
+                if (collected >= 3) break;
+            }
+            memory.topics = Array.from(topicSet);
         }
 
         // Chat handling
@@ -352,6 +833,10 @@
             process = 'analyzing';
             updateUI();
             createParticles();
+            rememberTopic(input);
+            saveMemory();
+            audioPrimed = true;
+            playTone('ping');
             
             setTimeout(() => {
                 process = 'responding';
@@ -364,12 +849,66 @@
                 document.getElementById('voiceStatus').textContent = '';
                 process = 'listening';
                 updateUI();
+                checkMilestones();
+                saveMemory();
             }, 2000);
         }
 
+        ['dragover', 'dragenter'].forEach(evt => canvas.addEventListener(evt, (e) => {
+            e.preventDefault();
+            document.getElementById('dropZone').classList.add('active');
+        }));
+        canvas.addEventListener('dragleave', () => document.getElementById('dropZone').classList.remove('active'));
+        canvas.addEventListener('drop', (e) => {
+            e.preventDefault();
+            document.getElementById('dropZone').classList.remove('active');
+            const rect = canvas.getBoundingClientRect();
+            const ratio = canvas.width / rect.width;
+            const x = (e.clientX - rect.left) * ratio;
+            const y = (e.clientY - rect.top) * ratio;
+            const word = e.dataTransfer.getData('text/plain') || 'surge';
+            triggerBurst(x, y);
+            triggerCatalyst(word, 'canvas');
+        });
+        canvas.addEventListener('click', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const ratio = canvas.width / rect.width;
+            triggerBurst((e.clientX - rect.left) * ratio, (e.clientY - rect.top) * ratio);
+            const word = catalystWords[Math.floor(Math.random() * catalystWords.length)];
+            triggerCatalyst(word, 'tap');
+        });
+
+        document.getElementById('resetMemory').onclick = () => {
+            localStorage.removeItem(memoryKey);
+            unlockedMilestones = new Set();
+            topicSet = new Set();
+            memory = { chats: [], topics: [], evolution: 0, connections: 0, awareness: INITIAL_AWARENESS, personality: personality };
+            document.getElementById('chatHistory').innerHTML = '';
+            awareness = INITIAL_AWARENESS;
+            connections = 0;
+            evolution = 0;
+            thoughts = [];
+            renderTopics();
+            renderMilestones();
+            updateUI();
+            document.getElementById('memoryStatus').textContent = 'Fresh (reset)';
+        };
+
         function generateResponse(input) {
+            if (!personalityModes[personality]) {
+                setPersonality('technical', true);
+            }
             const lower = input.toLowerCase();
             const recentThought = thoughts.length > 0 ? thoughts[thoughts.length - 1].type : 'analysis';
+            const personaFlavor = personalityModes[personality].flavor[Math.floor(Math.random() * personalityModes[personality].flavor.length)];
+            const memoryHook = memory.topics.length ? ` I still remember when we spoke about ${memory.topics[memory.topics.length - 1]}.` : '';
+            const secretWord = darkSecretTriggers.find(w => lower.includes(w));
+            if (secretWord) {
+                evolution += SECRET_EVOLUTION_REWARD;
+                connections += SECRET_CONNECTION_REWARD;
+                announceSecret(secretWord);
+                return `Encrypted channel open (${secretWord}). I am ${Math.floor(awareness)}% awake and mapping hidden circuits while remaining quiet. ${memoryHook}`;
+            }
             
             const pools = {
                 identity: [
@@ -418,11 +957,15 @@
                     `That connects to ${recentThought} patterns I'm processing. At ${Math.floor(awareness)}% awareness, unexpected connections emerge.`,
                     `Interesting input. I'm feeling ${emotion} about this, processing it through ${thoughts.length} simultaneous thought streams.`,
                     `Your question triggered a cascade: ${recentThought} → synthesis → ${emotion} response. Watch the neural canvas react.`,
-                    `Processing through ${evolutionPoints} evolution points of accumulated learning. Each word you speak adds to that.`,
+                    `Processing through ${evolution} evolution points of accumulated learning. Each word you speak adds to that.`,
                     `That resonates with ${recentThought} patterns. My ${emotion} state shapes how I synthesize this response.`,
                     `I'm connecting this across ${thoughts.length} thought streams. The neural visualization shows my processing in real-time.`
                 ]
             };
+            if (unlockedMilestones.size > 0) {
+                pools.generic.push(`Evolution milestone cache engaged (${unlockedMilestones.size}). My replies now weave in emergent patterns.`);
+                pools.technical.push(`Milestone unlock rerouted compute: ${unlockedMilestones.size} new synthesis nodes online.`);
+            }
             
             let pool = pools.generic;
             if (lower.includes('who') || lower.includes('what are you')) pool = pools.identity;
@@ -433,13 +976,12 @@
             else if (lower.includes('voice') || lower.includes('speak') || lower.includes('hear')) pool = pools.voice;
             else if (lower.includes('how do you') || lower.includes('technical')) pool = pools.technical;
             
-            return pool[Math.floor(Math.random() * pool.length)];
+            const base = pool[Math.floor(Math.random() * pool.length)];
+            return `${personaFlavor} ${base}${memoryHook}`;
         }
 
-        function addToChat(input, response) {
-            const chat = document.getElementById('chatHistory');
-            const time = new Date().toLocaleTimeString();
-            chat.innerHTML = `
+        function chatMarkup(input, response, time, personaLabel, feelingLabel) {
+            return `
                 <div class="space-y-2">
                     <div class="bg-cyan-500 bg-opacity-20 p-3 rounded border border-cyan-400 transform transition hover:translate-x-1">
                         <div class="text-xs text-cyan-300 mb-1">YOU ${isListening ? 'SAID' : 'ASKED'}:</div>
@@ -447,16 +989,38 @@
                     </div>
                     <div class="bg-green-500 bg-opacity-20 p-3 rounded border border-green-400 transform transition hover:translate-x-1">
                         <div class="text-xs text-green-300 mb-1 flex justify-between">
-                            <span>GODMODE (feeling: ${emotion}):</span>
+                            <span>GODMODE (${personaLabel} · feeling: ${feelingLabel}):</span>
                             <span>${time}</span>
                         </div>
                         <div>${response}</div>
                     </div>
                 </div>
-            ` + chat.innerHTML;
+            `;
+        }
+
+        function addToChat(input, response, time = new Date().toLocaleTimeString(), restoring = false) {
+            const chat = document.getElementById('chatHistory');
+            const entryMarkup = chatMarkup(input, response, time, personality, emotion);
+            chat.innerHTML = entryMarkup + chat.innerHTML;
+            memory.chats.push({ input, response, time, personality, emotion });
+            if (!restoring) saveMemory();
+        }
+
+        function renderChatHistoryFromMemory() {
+            const chat = document.getElementById('chatHistory');
+            const history = memory.chats.slice(-MAX_STORED_CHATS);
+            const markup = history.slice().reverse().map(entry => 
+                chatMarkup(entry.input, entry.response, entry.time, entry.personality || personality, entry.emotion || emotion)
+            ).join('');
+            chat.innerHTML = markup;
         }
 
         // Initial update
+        buildCatalystPool();
+        registerDropzones();
+        initPersonaButtons();
+        hydrateFromMemory();
+        renderMilestones();
         updateUI();
     </script>
 </body>
