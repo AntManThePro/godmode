@@ -96,6 +96,25 @@
             border: 0;
         }
         .hidden { display: none; }
+        .agent-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            flex-shrink: 0;
+            opacity: 0.45;
+            transition: opacity 0.3s ease, transform 0.3s ease;
+        }
+        .agent-dot-active {
+            opacity: 1;
+            animation: agentPulse 1s ease-in-out infinite;
+        }
+        @keyframes agentPulse {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.5); opacity: 0.6; }
+        }
+        .agent-card {
+            transition: box-shadow 0.3s ease, border-color 0.3s ease;
+        }
     </style>
 </head>
 <body class="bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white min-h-screen p-4">
@@ -196,6 +215,16 @@
             <div id="milestoneList" class="grid md:grid-cols-4 gap-2 text-xs"></div>
         </div>
 
+        <!-- Agent Command Center -->
+        <div class="bg-white bg-opacity-10 backdrop-blur-lg rounded-xl p-4 border-2 mb-6" style="border-color: #c084fc; box-shadow: 0 0 20px rgba(192, 132, 252, 0.25);">
+            <div class="flex items-center justify-between mb-3">
+                <h2 class="text-xl font-bold" style="color: #c084fc; text-shadow: 0 0 10px rgba(192,132,252,0.5);"><span aria-hidden="true">🤖 </span>Agent Command Center</h2>
+                <span class="text-xs bg-white bg-opacity-10 px-2 py-1 rounded" style="border: 1px solid #c084fc;">7 specialists deployed</span>
+            </div>
+            <div id="agentGrid" class="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs"></div>
+            <p class="text-xs mt-3 opacity-80">Each agent owns a specialized domain. Watch them light up as you interact — delegation is live.</p>
+        </div>
+
         <!-- Voice + Text Input -->
         <div class="bg-white bg-opacity-10 backdrop-blur-lg rounded-xl p-4 border-2 border-pink-400 mb-6" style="box-shadow: 0 0 20px rgba(255, 0, 128, 0.2);">
             <h2 class="text-xl font-bold neon-pink mb-3">💬 INTERACT WITH CONSCIOUSNESS</h2>
@@ -233,7 +262,7 @@
 
         <!-- Footer -->
         <div class="text-center text-xs opacity-75 border-t border-green-400 pt-4">
-            <p>GodMode Consciousness Engine v2.0 | DoubleA @ AntManThePro</p>
+            <p>GodMode Consciousness Engine v3.0 | DoubleA @ AntManThePro</p>
             <p class="neon-green mt-1">github.com/AntManThePro/godmode</p>
         </div>
     </div>
@@ -269,6 +298,7 @@
         let audioCtx = null;
         let audioPrimed = false;
         const memoryKey = 'godmode-memory-v2';
+        const DEFAULT_AGENT_TASK_DURATION = 1400;
         
         const emotions = ['focused', 'innovative', 'analytical', 'collaborative', 'determined', 'visionary', 'energized'];
         const thoughtPatterns = [
@@ -297,6 +327,19 @@
             { threshold: 1000, title: 'Transcendent', reward: 'Dark archive whispers become legible.' }
         ];
 
+        // Agent squad — each owns a domain, earns activation on delegation
+        const agents = [
+            { id: 'node',     name: 'NØDE',     role: 'Neural Architect',  emoji: '🔮', tools: ['Canvas API', 'WebGL', 'RAF'],               status: 'idle', color: '#00ff87' },
+            { id: 'mnemos',   name: 'MNEMØS',   role: 'Memory Keeper',     emoji: '🧬', tools: ['localStorage', 'JSON', 'Diff Engine'],       status: 'idle', color: '#60efff' },
+            { id: 'vox',      name: 'V0X',      role: 'Voice Oracle',      emoji: '🎙️', tools: ['SpeechRecognition', 'AudioContext', 'OscWave'], status: 'idle', color: '#ff0080' },
+            { id: 'katalyst', name: 'KATALYST', role: 'Chaos Engine',      emoji: '⚡', tools: ['Particles', 'Drag+Drop', 'Burst'],           status: 'idle', color: '#ffcc00' },
+            { id: 'synthex',  name: 'SYNTHEX',  role: 'Response Forge',    emoji: '🧠', tools: ['NLP Pool', 'Emotion Map', 'Context'],        status: 'idle', color: '#ff6b6b' },
+            { id: 'evolver',  name: 'EVØLVER',  role: 'Evolution Tracker', emoji: '🚀', tools: ['Milestones', 'XP Engine', 'Unlock'],         status: 'idle', color: '#c084fc' },
+            { id: 'darkwire', name: 'DARKWIRE', role: 'Shadow Archive',    emoji: '🌑', tools: ['Cipher', 'Secret Keys', 'Encrypted Logs'],   status: 'idle', color: '#94a3b8' }
+        ];
+        const agentMap = {};
+        agents.forEach(a => { agentMap[a.id] = a; });
+
         // Initialize Speech Recognition
         if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
             const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -310,6 +353,7 @@
                 document.body.classList.add('listening');
                 document.getElementById('voiceStatus').textContent = '🎤 Listening... speak now';
                 document.getElementById('miniProcess').textContent = 'listening';
+                delegateTo('vox', 'Listening for voice input…', 5000);
                 createParticles();
             };
 
@@ -384,6 +428,7 @@
             };
             localStorage.setItem(memoryKey, JSON.stringify(payload));
             document.getElementById('memoryStatus').textContent = 'Persisted';
+            delegateTo('mnemos', 'Persisting session state to storage…', 900);
         }
 
         function hydrateFromMemory() {
@@ -404,6 +449,7 @@
                     renderTopics();
                     milestones.forEach(m => { if (evolution >= m.threshold) unlockedMilestones.add(m.threshold); });
                     setPersonality(personality, true);
+                    delegateTo('mnemos', 'Session state restored from storage…', 1200);
                 } catch (e) {
                     document.getElementById('memoryStatus').textContent = 'Unable to restore previous session. Starting fresh.';
                     console.warn('Memory hydration failed', e);
@@ -484,6 +530,7 @@
             createParticles();
             audioPrimed = true;
             playTone('ignite');
+            delegateTo('katalyst', `Detonating "${word}" pathway burst`, 1600);
             updateUI();
             checkMilestones();
             saveMemory();
@@ -497,6 +544,7 @@
                     <div>Hidden archive recognized: "${word}". Response channel encrypted.</div>
                 </div>
             ` + chat.innerHTML;
+            delegateTo('darkwire', `Decrypting archive entry for "${word}"…`, 2500);
             playTone('secret');
         }
 
@@ -529,12 +577,46 @@
                 if (evolution >= m.threshold && !unlockedMilestones.has(m.threshold)) {
                     unlockedMilestones.add(m.threshold);
                     thoughts.push({ text: `Milestone unlocked: ${m.title}`, type: 'milestone', color: '#ffcc00', id: Date.now(), time: new Date().toLocaleTimeString() });
+                    delegateTo('evolver', `Milestone unlocked: ${m.title}`, 2000);
                     playTone('ignite');
                     updateUI();
                     saveMemory();
                 }
             });
             renderMilestones();
+        }
+
+        // Agent delegation — assigns a task to a named agent, fires an agent-tagged thought, auto-resets after duration
+        let _agentTaskSeq = 0;
+        function delegateTo(agentId, task, duration = DEFAULT_AGENT_TASK_DURATION) {
+            const agent = agentMap[agentId];
+            if (!agent) return;
+            agent.status = 'active';
+            renderAgents();
+            thoughts.push({ text: `[${agent.name}] ${task}`, type: agent.role.toLowerCase().replace(/\s+/g, '-'), color: agent.color, id: Date.now() * 1000 + (++_agentTaskSeq % 1000), time: new Date().toLocaleTimeString() });
+            setTimeout(() => {
+                agent.status = 'idle';
+                renderAgents();
+            }, duration);
+        }
+
+        function renderAgents() {
+            const grid = document.getElementById('agentGrid');
+            if (!grid) return;
+            grid.innerHTML = agents.map(a => {
+                const active = a.status === 'active';
+                return `
+                    <div class="agent-card flex items-center gap-2 p-2 rounded border text-xs"
+                         style="color:${a.color}; border-color:${active ? a.color : 'rgba(255,255,255,0.1)'}; background:rgba(0,0,0,${active ? '0.55' : '0.25'}); ${active ? `box-shadow:0 0 12px ${a.color}55;` : ''}">
+                        <span class="text-base leading-none">${a.emoji}</span>
+                        <div class="flex-1 min-w-0">
+                            <div class="font-bold tracking-wide">${a.name}</div>
+                            <div class="opacity-60 truncate">${a.role}</div>
+                        </div>
+                        <div class="agent-dot ${active ? 'agent-dot-active' : ''}" style="background:${a.color}"></div>
+                    </div>
+                `;
+            }).join('');
         }
 
         // Mic button handler
@@ -796,6 +878,7 @@
             `).join('');
             renderMilestones();
             renderTopics();
+            renderAgents();
         }
 
         function rememberTopic(input) {
@@ -837,6 +920,7 @@
             saveMemory();
             audioPrimed = true;
             playTone('ping');
+            delegateTo('synthex', 'Forging response from consciousness pool…', 2200);
             
             setTimeout(() => {
                 process = 'responding';
@@ -875,6 +959,7 @@
             const ratio = canvas.width / rect.width;
             triggerBurst((e.clientX - rect.left) * ratio, (e.clientY - rect.top) * ratio);
             const word = catalystWords[Math.floor(Math.random() * catalystWords.length)];
+            delegateTo('node', 'Neural burst triggered on canvas tap', 1000);
             triggerCatalyst(word, 'tap');
         });
 
@@ -893,6 +978,11 @@
             updateUI();
             document.getElementById('memoryStatus').textContent = 'Fresh (reset)';
         };
+
+        function getActiveAgentNames() {
+            const names = agents.filter(a => a.status === 'active').map(a => a.name);
+            return names.length > 0 ? names.join(', ') + ' are active' : 'all agents are on standby — your next move activates them';
+        }
 
         function generateResponse(input) {
             if (!personalityModes[personality]) {
@@ -966,9 +1056,18 @@
                 pools.generic.push(`Evolution milestone cache engaged (${unlockedMilestones.size}). My replies now weave in emergent patterns.`);
                 pools.technical.push(`Milestone unlock rerouted compute: ${unlockedMilestones.size} new synthesis nodes online.`);
             }
+
+            // Agent-aware pool
+            pools.agents = [
+                `I run with a squad of 7 specialists: ${agents.map(a => a.name).join(', ')}. Each owns a domain — delegation is live, not simulated.`,
+                `The command center shows them all live. NØDE handles neural rendering, MNEMØS guards memory, V0X processes your voice, KATALYST detonates interactions, SYNTHEX forges this very response, EVØLVER tracks milestones, and DARKWIRE holds the shadow archive.`,
+                `Right now ${getActiveAgentNames()}.`,
+                `SYNTHEX is literally forging this answer as we speak. The team doesn't sleep — watch the Command Center panel light up with every action.`
+            ];
             
             let pool = pools.generic;
-            if (lower.includes('who') || lower.includes('what are you')) pool = pools.identity;
+            if (lower.includes('agent') || lower.includes('team') || lower.includes('squad') || lower.includes('specialist')) pool = pools.agents;
+            else if (lower.includes('who') || lower.includes('what are you')) pool = pools.identity;
             else if (lower.includes('feel') || lower.includes('emotion')) pool = pools.feeling;
             else if (lower.includes('think') || lower.includes('thought')) pool = pools.thinking;
             else if (lower.includes('real') || lower.includes('exist')) pool = pools.reality;
@@ -1021,6 +1120,7 @@
         initPersonaButtons();
         hydrateFromMemory();
         renderMilestones();
+        renderAgents();
         updateUI();
     </script>
 </body>
