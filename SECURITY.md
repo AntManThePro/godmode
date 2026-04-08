@@ -2,7 +2,7 @@
 
 ## Supported Versions
 
-Only the latest version of GodMode deployed at the live demo URL is actively maintained. Security fixes are applied to `main` and reflected immediately in the hosted build.
+Only the latest version of GodMode deployed from the `main` branch in this repository's hosted build is actively maintained. Security fixes are applied to `main` and reflected immediately in the hosted build.
 
 | Version | Supported |
 |---------|-----------|
