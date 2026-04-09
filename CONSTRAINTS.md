@@ -15,8 +15,8 @@
 | WebGL | Optional — 2D canvas fallback activates automatically |
 | Web Speech API | Optional — text input fallback always available |
 | `AudioContext` | Deferred until first user gesture (browser autoplay policy) |
-| Network | None required after initial page load (fully offline-capable after Tailwind CDN loads) |
-| Tailwind CSS | Loaded via CDN (`https://cdn.tailwindcss.com`); internet required on first load |
+| Network | None required after initial page load only if CDN assets are already cached; otherwise internet access is required |
+| Tailwind CSS | Loaded via CDN (`https://cdn.tailwindcss.com`); internet required on first load, and guaranteed offline operation requires serving Tailwind locally |
 
 ---
 
