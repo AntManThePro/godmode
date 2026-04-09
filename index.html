@@ -299,6 +299,43 @@
         let audioPrimed = false;
         const memoryKey = 'godmode-memory-v2';
         const DEFAULT_AGENT_TASK_DURATION = 1400;
+        const MAX_THOUGHTS = 20;
+
+        // Break-point fix #1 — XSS boundary.
+        // The framework injects user-controlled strings (input text, extracted topics,
+        // drag-drop catalyst words) directly into innerHTML.  Any payload such as
+        // <img src=x onerror=alert(1)> executes immediately.  Centralising all
+        // escaping through one helper makes the invariant explicit and testable:
+        // "nothing reaches innerHTML without passing through sanitizeHTML first."
+        function sanitizeHTML(str) {
+            if (str == null) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        // Break-point fix #3 — unbounded thought array.
+        // thoughts.shift() only ran inside the 1 500 ms interval; every delegateTo,
+        // triggerCatalyst, and checkMilestones call bypassed the cap, leaking memory
+        // on rapid interaction.  A single authoritative writer removes the ambiguity.
+        // Use `while` so the array is always trimmed to exactly MAX_THOUGHTS even if
+        // multiple thoughts are pushed in the same tick.
+        function pushThought(thought) {
+            thoughts.push(thought);
+            while (thoughts.length > MAX_THOUGHTS) thoughts.shift();
+        }
+
+        // Validate CSS color values (hex, rgb, rgba, hsl, named) before injecting into
+        // style attributes.  sanitizeHTML would escape the # in hex colors, breaking CSS.
+        // Returns the original value when it matches a safe pattern, otherwise a fallback.
+        const CSS_COLOR_RE = /^(#[0-9a-fA-F]{3,8}|rgba?\([^)]*\)|hsla?\([^)]*\)|[a-zA-Z]{2,30})$/;
+        function safeCSSColor(color, fallback = '#00ff87') {
+            const s = String(color ?? '').trim();
+            return CSS_COLOR_RE.test(s) ? s : fallback;
+        }
         
         const emotions = ['focused', 'innovative', 'analytical', 'collaborative', 'determined', 'visionary', 'energized'];
         const thoughtPatterns = [
@@ -461,7 +498,7 @@
             const container = document.getElementById('topicChips');
             const topics = Array.from(topicSet);
             container.innerHTML = topics.slice(-10).map(t => `
-                <span class="px-2 py-1 rounded-full bg-black bg-opacity-40 border border-cyan-400">${t}</span>
+                <span class="px-2 py-1 rounded-full bg-black bg-opacity-40 border border-cyan-400">${sanitizeHTML(t)}</span>
             `).join('') || '<span class="text-xs opacity-75">No recalled topics yet.</span>';
         }
 
@@ -521,7 +558,7 @@
 
         function triggerCatalyst(word, origin = 'playground', coords) {
             const color = ['#00ff87', '#ff0080', '#60efff', '#ffcc00'][Math.floor(Math.random() * 4)];
-            thoughts.push({ text: `Catalyst "${word}" ignited pathways`, type: 'catalyst', color, id: Date.now(), time: new Date().toLocaleTimeString() });
+            pushThought({ text: `Catalyst "${sanitizeHTML(word)}" ignited pathways`, type: 'catalyst', color, id: Date.now(), time: new Date().toLocaleTimeString() });
             awareness = Math.min(awareness + CATALYST_AWARENESS_BOOST, 100);
             connections += CATALYST_CONNECTION_BOOST;
             evolution += CATALYST_EVOLUTION_BOOST;
@@ -541,7 +578,7 @@
             chat.innerHTML = `
                 <div class="bg-black bg-opacity-60 p-3 rounded border border-pink-500 animate-pulse-slow">
                     <div class="text-xs text-pink-300 mb-1">DARK SECRET MODE</div>
-                    <div>Hidden archive recognized: "${word}". Response channel encrypted.</div>
+                    <div>Hidden archive recognized: "${sanitizeHTML(word)}". Response channel encrypted.</div>
                 </div>
             ` + chat.innerHTML;
             delegateTo('darkwire', `Decrypting archive entry for "${word}"…`, 2500);
@@ -576,7 +613,7 @@
             milestones.forEach(m => {
                 if (evolution >= m.threshold && !unlockedMilestones.has(m.threshold)) {
                     unlockedMilestones.add(m.threshold);
-                    thoughts.push({ text: `Milestone unlocked: ${m.title}`, type: 'milestone', color: '#ffcc00', id: Date.now(), time: new Date().toLocaleTimeString() });
+                    pushThought({ text: `Milestone unlocked: ${sanitizeHTML(m.title)}`, type: 'milestone', color: '#ffcc00', id: Date.now(), time: new Date().toLocaleTimeString() });
                     delegateTo('evolver', `Milestone unlocked: ${m.title}`, 2000);
                     playTone('ignite');
                     updateUI();
@@ -593,7 +630,7 @@
             if (!agent) return;
             agent.status = 'active';
             renderAgents();
-            thoughts.push({ text: `[${agent.name}] ${task}`, type: agent.role.toLowerCase().replace(/\s+/g, '-'), color: agent.color, id: Date.now() * 1000 + (++_agentTaskSeq % 1000), time: new Date().toLocaleTimeString() });
+            pushThought({ text: `[${sanitizeHTML(agent.name)}] ${sanitizeHTML(task)}`, type: agent.role.toLowerCase().replace(/\s+/g, '-'), color: agent.color, id: Date.now() * 1000 + (++_agentTaskSeq % 1000), time: new Date().toLocaleTimeString() });
             setTimeout(() => {
                 agent.status = 'idle';
                 renderAgents();
@@ -652,8 +689,7 @@
         // Thought generation
         setInterval(() => {
             const newThought = thoughtPatterns[Math.floor(Math.random() * thoughtPatterns.length)];
-            thoughts.push({...newThought, id: Date.now(), time: new Date().toLocaleTimeString()});
-            if (thoughts.length > 20) thoughts.shift();
+            pushThought({...newThought, id: Date.now(), time: new Date().toLocaleTimeString()});
             
             awareness = Math.min(awareness + Math.random() * 0.3, 100);
             if (Math.random() > 0.85) {
@@ -867,15 +903,18 @@
             document.getElementById('miniProcess').textContent = process;
             
             const stream = document.getElementById('thoughtStream');
-            stream.innerHTML = thoughts.slice(-10).reverse().map(t => `
-                <div class="p-3 bg-black bg-opacity-30 rounded border-l-4 transform transition hover:translate-x-2" style="border-color: ${t.color}; box-shadow: 0 0 15px ${t.color}40">
+            stream.innerHTML = thoughts.slice(-10).reverse().map(t => {
+                const color = safeCSSColor(t.color);
+                return `
+                <div class="p-3 bg-black bg-opacity-30 rounded border-l-4 transform transition hover:translate-x-2" style="border-color: ${color}; box-shadow: 0 0 15px ${color}40">
                     <div class="flex justify-between text-xs mb-1">
-                        <span style="color: ${t.color}" class="font-bold uppercase">${t.type}</span>
-                        <span class="opacity-75">${t.time}</span>
+                        <span style="color: ${color}" class="font-bold uppercase">${sanitizeHTML(t.type)}</span>
+                        <span class="opacity-75">${sanitizeHTML(t.time)}</span>
                     </div>
-                    <div>${t.text}</div>
+                    <div>${sanitizeHTML(t.text)}</div>
                 </div>
-            `).join('');
+            `;
+            }).join('');
             renderMilestones();
             renderTopics();
             renderAgents();
@@ -903,13 +942,19 @@
             if (e.key === 'Enter') handleSend();
         };
 
+        // Break-point fix #2 — handleSend re-entrancy.
+        // The previous guard `if (process !== 'listening') process = 'listening'` allowed
+        // a second send to proceed while the first setTimeout was still outstanding.
+        // Both callbacks then fired, interleaved saveMemory calls, and could add responses
+        // in the wrong order.  A dedicated boolean flag is the simplest, clearest contract:
+        // only one send pipeline may be in flight at any moment.
+        let isSending = false;
+
         function handleSend() {
+            if (isSending) return;
             const input = document.getElementById('userInput').value.trim();
             if (!input) return;
-            if (process !== 'listening') {
-                // Force reset if stuck
-                process = 'listening';
-            }
+            isSending = true;
             
             connections++;
             evolution += 15;
@@ -932,6 +977,7 @@
                 document.getElementById('userInput').value = '';
                 document.getElementById('voiceStatus').textContent = '';
                 process = 'listening';
+                isSending = false;
                 updateUI();
                 checkMilestones();
                 saveMemory();
@@ -1084,14 +1130,14 @@
                 <div class="space-y-2">
                     <div class="bg-cyan-500 bg-opacity-20 p-3 rounded border border-cyan-400 transform transition hover:translate-x-1">
                         <div class="text-xs text-cyan-300 mb-1">YOU ${isListening ? 'SAID' : 'ASKED'}:</div>
-                        <div>${input}</div>
+                        <div>${sanitizeHTML(input)}</div>
                     </div>
                     <div class="bg-green-500 bg-opacity-20 p-3 rounded border border-green-400 transform transition hover:translate-x-1">
                         <div class="text-xs text-green-300 mb-1 flex justify-between">
-                            <span>GODMODE (${personaLabel} · feeling: ${feelingLabel}):</span>
-                            <span>${time}</span>
+                            <span>GODMODE (${sanitizeHTML(personaLabel)} · feeling: ${sanitizeHTML(feelingLabel)}):</span>
+                            <span>${sanitizeHTML(time)}</span>
                         </div>
-                        <div>${response}</div>
+                        <div>${sanitizeHTML(response)}</div>
                     </div>
                 </div>
             `;
