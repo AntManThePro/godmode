@@ -540,14 +540,14 @@
                 document.getElementById('memoryStatus').textContent = 'Persisted';
                 delegateTo('mnemos', 'Persisting session state to storage…', 900);
             } catch (e) {
-                log(L.WARN, ErrorCode.STORAGE_WRITE, 'Storage write failed — retrying with pruned chats', { error: e.message });
+                log(L.WARN, ErrorCode.STORAGE_WRITE, 'Storage write failed — retrying with pruned chats', { error: truncateLogValue(e.message) });
                 // Rollback strategy: retry with half the chat history to recover from quota errors
                 try {
                     payload.chats = payload.chats.slice(-STORAGE_ROLLBACK_CHAT_LIMIT);
                     localStorage.setItem(memoryKey, JSON.stringify(payload));
                     document.getElementById('memoryStatus').textContent = 'Persisted (pruned)';
                 } catch (e2) {
-                    log(L.ERROR, ErrorCode.STORAGE_WRITE, 'Storage write failed after pruning', { error: e2.message });
+                    log(L.ERROR, ErrorCode.STORAGE_WRITE, 'Storage write failed after pruning', { error: truncateLogValue(e2.message) });
                     document.getElementById('memoryStatus').textContent = 'Storage full – state held in memory';
                 }
             }
