@@ -290,6 +290,7 @@
         let process = 'listening';
         let isListening = false;
         let recognition = null;
+        let speechRetryCount = 0;
         let personality = 'technical';
         let memory = { chats: [], topics: [], evolution: 0, connections: 0, awareness: INITIAL_AWARENESS, personality: 'technical' };
         let topicSet = new Set(memory.topics);
@@ -299,7 +300,99 @@
         let audioPrimed = false;
         const memoryKey = 'godmode-memory-v2';
         const DEFAULT_AGENT_TASK_DURATION = 1400;
-        
+        const MAX_INPUT_LENGTH = 500;
+        const MAX_CATALYST_WORD_LENGTH = 64;
+        const MAX_LOG_VALUE_LENGTH = 64;
+        const MAX_SPEECH_RETRIES = 2;
+        const PROCESS_WATCHDOG_TIMEOUT_MS = 6000;
+        const STORAGE_ROLLBACK_CHAT_LIMIT = Math.floor(MAX_STORED_CHATS / 2);
+        const SPEECH_RETRIABLE_ERRORS = new Set(['network']);
+        // Intentionally excludes quotes and other special characters to prevent
+        // HTML attribute injection; length enforced by MAX_CATALYST_WORD_LENGTH.
+        const DRAG_WORD_RE = new RegExp(`^[a-zA-Z0-9 _\\-]{1,${MAX_CATALYST_WORD_LENGTH}}$`);
+        // Only allow hex color notation to fully prevent CSS injection via url() or javascript:
+        const CSS_COLOR_RE = /^#[0-9a-fA-F]{3,8}$/;
+
+        // ─── Log code taxonomy ────────────────────────────────────────────────
+        // ErrorCode unifies both error events and success/info events in one lookup
+        // table. _SUCCESS suffixes distinguish non-fault events from fault ones.
+        const ErrorCode = {
+            STORAGE_WRITE:        'STORAGE_WRITE',
+            STORAGE_READ:         'STORAGE_READ',
+            HYDRATION_CORRUPT:    'HYDRATION_CORRUPT',
+            HYDRATION_SUCCESS:    'HYDRATION_SUCCESS',
+            SPEECH_ERROR:         'SPEECH_ERROR',
+            STATE_STUCK:          'STATE_STUCK',
+            INPUT_INVALID:        'INPUT_INVALID',
+            INVARIANT_VIOLATION:  'INVARIANT_VIOLATION',
+            RESPONSE_ERROR:       'RESPONSE_ERROR'
+        };
+        const L = { DEBUG: 0, INFO: 1, WARN: 2, ERROR: 3 };
+        function log(level, code, message, data) {
+            const entry = { ts: new Date().toISOString(), level, code, message, ...(data || {}) };
+            if      (level >= L.ERROR) console.error('[GodMode]', entry);
+            else if (level >= L.WARN)  console.warn('[GodMode]', entry);
+            else if (level >= L.INFO)  console.info('[GodMode]', entry);
+            else                       console.debug('[GodMode]', entry);
+        }
+        // Safely truncate any external value before embedding in a log entry.
+        function truncateLogValue(val) {
+            return String(val ?? 'unknown').slice(0, MAX_LOG_VALUE_LENGTH);
+        }
+
+        // ─── Security helpers ─────────────────────────────────────────────────
+        // All user-controlled content injected into innerHTML must pass through
+        // sanitizeHTML(); CSS style attributes use safeCSSColor() instead.
+        function sanitizeHTML(str) {
+            const div = document.createElement('div');
+            div.textContent = String(str ?? '');
+            return div.innerHTML;
+        }
+        function safeCSSColor(str) {
+            const s = String(str ?? '').trim();
+            return CSS_COLOR_RE.test(s) ? s : '#00ff87';
+        }
+        function validateDragWord(word) {
+            const s = String(word ?? '').trim();
+            return DRAG_WORD_RE.test(s) ? s : null;
+        }
+
+        // ─── Invariant enforcement ────────────────────────────────────────────
+        // Clamps all numeric state to valid ranges and resets any invalid enum
+        // values. Call after every batch of mutations before persisting.
+        function validateNumericField(value, min, max, fallback) {
+            return (typeof value === 'number' && isFinite(value) && value >= min && value <= max) ? value : fallback;
+        }
+        function assertInvariants() {
+            let valid = true;
+            if (validateNumericField(awareness, 0, 100, null) === null) {
+                log(L.WARN, ErrorCode.INVARIANT_VIOLATION, 'awareness out of range', { awareness });
+                awareness = Math.max(0, Math.min(100, isFinite(awareness) ? awareness : INITIAL_AWARENESS));
+                valid = false;
+            }
+            if (validateNumericField(connections, 0, Infinity, null) === null) {
+                log(L.WARN, ErrorCode.INVARIANT_VIOLATION, 'connections invalid', { connections });
+                connections = Math.max(0, isFinite(connections) ? Math.round(connections) : 0);
+                valid = false;
+            }
+            if (validateNumericField(evolution, 0, Infinity, null) === null) {
+                log(L.WARN, ErrorCode.INVARIANT_VIOLATION, 'evolution invalid', { evolution });
+                evolution = Math.max(0, isFinite(evolution) ? Math.round(evolution) : 0);
+                valid = false;
+            }
+            if (!personalityModes[personality]) {
+                log(L.WARN, ErrorCode.INVARIANT_VIOLATION, 'unknown personality — resetting', { personality });
+                personality = 'technical';
+                valid = false;
+            }
+            if (!emotions.includes(emotion)) {
+                log(L.WARN, ErrorCode.INVARIANT_VIOLATION, 'unknown emotion — resetting', { emotion });
+                emotion = 'focused';
+                valid = false;
+            }
+            return valid;
+        }
+
         const emotions = ['focused', 'innovative', 'analytical', 'collaborative', 'determined', 'visionary', 'energized'];
         const thoughtPatterns = [
             { text: "Processing technical architectures…", type: 'analysis', color: '#00ff87' },
@@ -374,12 +467,27 @@
             recognition.onerror = (event) => {
                 isListening = false;
                 document.body.classList.remove('listening');
-                document.getElementById('voiceStatus').textContent = `❌ ${event.error}`;
-                setTimeout(() => document.getElementById('voiceStatus').textContent = '', 3000);
+                log(L.WARN, ErrorCode.SPEECH_ERROR, 'Speech recognition error', { error: truncateLogValue(event.error) });
+                if (SPEECH_RETRIABLE_ERRORS.has(event.error) && speechRetryCount < MAX_SPEECH_RETRIES) {
+                    speechRetryCount++;
+                    document.getElementById('voiceStatus').textContent = `🔄 Retrying… (${speechRetryCount}/${MAX_SPEECH_RETRIES})`;
+                    setTimeout(() => {
+                        try { recognition.start(); } catch (e) {
+                            log(L.ERROR, ErrorCode.SPEECH_ERROR, 'Speech retry failed', { error: truncateLogValue(e) });
+                            document.getElementById('voiceStatus').textContent = '❌ Speech unavailable';
+                            setTimeout(() => { document.getElementById('voiceStatus').textContent = ''; }, 3000);
+                        }
+                    }, 1000);
+                } else {
+                    speechRetryCount = 0;
+                    document.getElementById('voiceStatus').textContent = `❌ ${event.error}`;
+                    setTimeout(() => document.getElementById('voiceStatus').textContent = '', 3000);
+                }
             };
 
             recognition.onend = () => {
                 isListening = false;
+                speechRetryCount = 0;
                 document.body.classList.remove('listening');
                 if (!document.getElementById('voiceStatus').textContent.includes('Got it')) {
                     document.getElementById('voiceStatus').textContent = '';
@@ -416,6 +524,7 @@
         }
 
         function saveMemory() {
+            assertInvariants();
             const topicsArray = Array.from(topicSet).slice(-MAX_STORED_TOPICS);
             memory.topics = topicsArray;
             const payload = {
@@ -426,34 +535,73 @@
                 awareness,
                 personality
             };
-            localStorage.setItem(memoryKey, JSON.stringify(payload));
-            document.getElementById('memoryStatus').textContent = 'Persisted';
-            delegateTo('mnemos', 'Persisting session state to storage…', 900);
+            try {
+                localStorage.setItem(memoryKey, JSON.stringify(payload));
+                document.getElementById('memoryStatus').textContent = 'Persisted';
+                delegateTo('mnemos', 'Persisting session state to storage…', 900);
+            } catch (e) {
+                log(L.WARN, ErrorCode.STORAGE_WRITE, 'Storage write failed — retrying with pruned chats', { error: truncateLogValue(e.message) });
+                // Rollback strategy: retry with half the chat history to recover from quota errors
+                try {
+                    payload.chats = payload.chats.slice(-STORAGE_ROLLBACK_CHAT_LIMIT);
+                    localStorage.setItem(memoryKey, JSON.stringify(payload));
+                    document.getElementById('memoryStatus').textContent = 'Persisted (pruned)';
+                } catch (e2) {
+                    log(L.ERROR, ErrorCode.STORAGE_WRITE, 'Storage write failed after pruning', { error: truncateLogValue(e2.message) });
+                    document.getElementById('memoryStatus').textContent = 'Storage full – state held in memory';
+                }
+            }
         }
 
         function hydrateFromMemory() {
-            const saved = localStorage.getItem(memoryKey);
-            if (saved) {
-                try {
-                    const data = JSON.parse(saved);
-                    memory = { ...memory, ...data };
-                    awareness = data.awareness || awareness;
-                    connections = data.connections || connections;
-                    evolution = data.evolution || evolution;
-                    personality = data.personality || personality;
-                    memory.chats = data.chats || [];
-                    topicSet = new Set(data.topics || []);
-                    memory.topics = Array.from(topicSet);
-                    document.getElementById('memoryStatus').textContent = 'Restored';
-                    renderChatHistoryFromMemory();
-                    renderTopics();
-                    milestones.forEach(m => { if (evolution >= m.threshold) unlockedMilestones.add(m.threshold); });
-                    setPersonality(personality, true);
-                    delegateTo('mnemos', 'Session state restored from storage…', 1200);
-                } catch (e) {
-                    document.getElementById('memoryStatus').textContent = 'Unable to restore previous session. Starting fresh.';
-                    console.warn('Memory hydration failed', e);
-                }
+            let raw;
+            try {
+                raw = localStorage.getItem(memoryKey);
+            } catch (e) {
+                log(L.ERROR, ErrorCode.STORAGE_READ, 'localStorage read failed', { error: truncateLogValue(e.message) });
+                document.getElementById('memoryStatus').textContent = 'Storage unavailable. Starting fresh.';
+                return;
+            }
+            if (!raw) return;
+            let data;
+            try {
+                data = JSON.parse(raw);
+            } catch (e) {
+                log(L.ERROR, ErrorCode.HYDRATION_CORRUPT, 'Saved state is corrupt JSON — clearing', { error: truncateLogValue(e.message) });
+                try { localStorage.removeItem(memoryKey); } catch (_) {}
+                document.getElementById('memoryStatus').textContent = 'Corrupted state cleared. Starting fresh.';
+                return;
+            }
+            // Validate each field independently before applying to live state.
+            // Invalid fields fall back to safe defaults rather than poisoning state.
+            const safeChats = Array.isArray(data.chats)
+                ? data.chats.filter(c => c && typeof c.input === 'string' && typeof c.response === 'string').slice(-MAX_STORED_CHATS)
+                : [];
+            const safeTopics = Array.isArray(data.topics)
+                ? data.topics.filter(t => typeof t === 'string' && DRAG_WORD_RE.test(t)).slice(-MAX_STORED_TOPICS)
+                : [];
+            const safeEvolution   = validateNumericField(data.evolution,   0, Infinity, 0);
+            const safeConnections = validateNumericField(data.connections, 0, Infinity, 0);
+            const safeAwareness   = validateNumericField(data.awareness,   0, 100,      INITIAL_AWARENESS);
+            const safePersonality = personalityModes[data.personality] ? data.personality : 'technical';
+            memory.chats = safeChats;
+            topicSet = new Set(safeTopics);
+            memory.topics = Array.from(topicSet);
+            evolution   = safeEvolution;
+            connections = safeConnections;
+            awareness   = safeAwareness;
+            personality = safePersonality;
+            try {
+                document.getElementById('memoryStatus').textContent = 'Restored';
+                renderChatHistoryFromMemory();
+                renderTopics();
+                milestones.forEach(m => { if (evolution >= m.threshold) unlockedMilestones.add(m.threshold); });
+                setPersonality(personality, true);
+                log(L.INFO, ErrorCode.HYDRATION_SUCCESS, 'Session restored', { evolution, connections, topics: safeTopics.length });
+                delegateTo('mnemos', 'Session state restored from storage…', 1200);
+            } catch (e) {
+                log(L.ERROR, ErrorCode.HYDRATION_CORRUPT, 'Error applying restored state', { error: truncateLogValue(e.message) });
+                document.getElementById('memoryStatus').textContent = 'Unable to restore previous session. Starting fresh.';
             }
         }
 
@@ -461,7 +609,7 @@
             const container = document.getElementById('topicChips');
             const topics = Array.from(topicSet);
             container.innerHTML = topics.slice(-10).map(t => `
-                <span class="px-2 py-1 rounded-full bg-black bg-opacity-40 border border-cyan-400">${t}</span>
+                <span class="px-2 py-1 rounded-full bg-black bg-opacity-40 border border-cyan-400">${sanitizeHTML(t)}</span>
             `).join('') || '<span class="text-xs opacity-75">No recalled topics yet.</span>';
         }
 
@@ -514,14 +662,18 @@
             ['dragleave', 'drop'].forEach(evt => zone.addEventListener(evt, () => zone.classList.remove('active')));
             zone.addEventListener('drop', (e) => {
                 e.preventDefault();
-                const word = e.dataTransfer.getData('text/plain') || 'impulse';
+                const raw = e.dataTransfer.getData('text/plain');
+                const word = validateDragWord(raw) || 'impulse';
                 triggerCatalyst(word);
             });
         }
 
         function triggerCatalyst(word, origin = 'playground', coords) {
+            // Defense in depth: validate even if callers already validated, to protect
+            // against direct calls (e.g., canvas click) that pass raw catalyst words.
+            const safeWord = validateDragWord(String(word ?? '')) || 'impulse';
             const color = ['#00ff87', '#ff0080', '#60efff', '#ffcc00'][Math.floor(Math.random() * 4)];
-            thoughts.push({ text: `Catalyst "${word}" ignited pathways`, type: 'catalyst', color, id: Date.now(), time: new Date().toLocaleTimeString() });
+            thoughts.push({ text: `Catalyst "${safeWord}" ignited pathways`, type: 'catalyst', color, id: Date.now(), time: new Date().toLocaleTimeString() });
             awareness = Math.min(awareness + CATALYST_AWARENESS_BOOST, 100);
             connections += CATALYST_CONNECTION_BOOST;
             evolution += CATALYST_EVOLUTION_BOOST;
@@ -530,7 +682,7 @@
             createParticles();
             audioPrimed = true;
             playTone('ignite');
-            delegateTo('katalyst', `Detonating "${word}" pathway burst`, 1600);
+            delegateTo('katalyst', `Detonating "${safeWord}" pathway burst`, 1600);
             updateUI();
             checkMilestones();
             saveMemory();
@@ -541,10 +693,10 @@
             chat.innerHTML = `
                 <div class="bg-black bg-opacity-60 p-3 rounded border border-pink-500 animate-pulse-slow">
                     <div class="text-xs text-pink-300 mb-1">DARK SECRET MODE</div>
-                    <div>Hidden archive recognized: "${word}". Response channel encrypted.</div>
+                    <div>Hidden archive recognized: "${sanitizeHTML(word)}". Response channel encrypted.</div>
                 </div>
             ` + chat.innerHTML;
-            delegateTo('darkwire', `Decrypting archive entry for "${word}"…`, 2500);
+            delegateTo('darkwire', `Decrypting archive entry for "${sanitizeHTML(word)}"…`, 2500);
             playTone('secret');
         }
 
@@ -605,15 +757,16 @@
             if (!grid) return;
             grid.innerHTML = agents.map(a => {
                 const active = a.status === 'active';
+                const color = safeCSSColor(a.color);
                 return `
                     <div class="agent-card flex items-center gap-2 p-2 rounded border text-xs"
-                         style="color:${a.color}; border-color:${active ? a.color : 'rgba(255,255,255,0.1)'}; background:rgba(0,0,0,${active ? '0.55' : '0.25'}); ${active ? `box-shadow:0 0 12px ${a.color}55;` : ''}">
-                        <span class="text-base leading-none">${a.emoji}</span>
+                         style="color:${color}; border-color:${active ? color : 'rgba(255,255,255,0.1)'}; background:rgba(0,0,0,${active ? '0.55' : '0.25'}); ${active ? `box-shadow:0 0 12px ${color}55;` : ''}">
+                        <span class="text-base leading-none">${sanitizeHTML(a.emoji)}</span>
                         <div class="flex-1 min-w-0">
-                            <div class="font-bold tracking-wide">${a.name}</div>
-                            <div class="opacity-60 truncate">${a.role}</div>
+                            <div class="font-bold tracking-wide">${sanitizeHTML(a.name)}</div>
+                            <div class="opacity-60 truncate">${sanitizeHTML(a.role)}</div>
                         </div>
-                        <div class="agent-dot ${active ? 'agent-dot-active' : ''}" style="background:${a.color}"></div>
+                        <div class="agent-dot ${active ? 'agent-dot-active' : ''}" style="background:${color}"></div>
                     </div>
                 `;
             }).join('');
@@ -867,15 +1020,18 @@
             document.getElementById('miniProcess').textContent = process;
             
             const stream = document.getElementById('thoughtStream');
-            stream.innerHTML = thoughts.slice(-10).reverse().map(t => `
-                <div class="p-3 bg-black bg-opacity-30 rounded border-l-4 transform transition hover:translate-x-2" style="border-color: ${t.color}; box-shadow: 0 0 15px ${t.color}40">
+            stream.innerHTML = thoughts.slice(-10).reverse().map(t => {
+                const color = safeCSSColor(t.color);
+                return `
+                <div class="p-3 bg-black bg-opacity-30 rounded border-l-4 transform transition hover:translate-x-2" style="border-color: ${color}; box-shadow: 0 0 15px ${color}40">
                     <div class="flex justify-between text-xs mb-1">
-                        <span style="color: ${t.color}" class="font-bold uppercase">${t.type}</span>
-                        <span class="opacity-75">${t.time}</span>
+                        <span style="color: ${color}" class="font-bold uppercase">${sanitizeHTML(t.type)}</span>
+                        <span class="opacity-75">${sanitizeHTML(t.time)}</span>
                     </div>
-                    <div>${t.text}</div>
+                    <div>${sanitizeHTML(t.text)}</div>
                 </div>
-            `).join('');
+                `;
+            }).join('');
             renderMilestones();
             renderTopics();
             renderAgents();
@@ -904,8 +1060,15 @@
         };
 
         function handleSend() {
-            const input = document.getElementById('userInput').value.trim();
-            if (!input) return;
+            const raw = document.getElementById('userInput').value.trim();
+            if (!raw) return;
+            if (raw.length > MAX_INPUT_LENGTH) {
+                log(L.WARN, ErrorCode.INPUT_INVALID, 'Input too long', { length: raw.length });
+                document.getElementById('voiceStatus').textContent = `⚠️ Input too long (max ${MAX_INPUT_LENGTH} chars)`;
+                setTimeout(() => { document.getElementById('voiceStatus').textContent = ''; }, 3000);
+                return;
+            }
+            const input = raw;
             if (process !== 'listening') {
                 // Force reset if stuck
                 process = 'listening';
@@ -921,20 +1084,42 @@
             audioPrimed = true;
             playTone('ping');
             delegateTo('synthex', 'Forging response from consciousness pool…', 2200);
+
+            // Watchdog: if the response callback is lost (e.g., exception), reset process after timeout.
+            // The flag guards against conflicting state updates if clearTimeout races with the callback.
+            let watchdogActive = true;
+            const watchdog = setTimeout(() => {
+                if (watchdogActive && (process === 'analyzing' || process === 'responding')) {
+                    log(L.WARN, ErrorCode.STATE_STUCK, 'Process watchdog fired — resetting stuck state', { process });
+                    process = 'listening';
+                    updateUI();
+                }
+            }, PROCESS_WATCHDOG_TIMEOUT_MS);
             
             setTimeout(() => {
-                process = 'responding';
-                updateUI();
-                
-                const response = generateResponse(input);
-                addToChat(input, response);
-                
-                document.getElementById('userInput').value = '';
-                document.getElementById('voiceStatus').textContent = '';
-                process = 'listening';
-                updateUI();
-                checkMilestones();
-                saveMemory();
+                watchdogActive = false;
+                try {
+                    process = 'responding';
+                    updateUI();
+                    
+                    const response = generateResponse(input);
+                    addToChat(input, response);
+                    
+                    document.getElementById('userInput').value = '';
+                    document.getElementById('voiceStatus').textContent = '';
+                    process = 'listening';
+                    updateUI();
+                    checkMilestones();
+                    saveMemory();
+                } catch (e) {
+                    log(L.ERROR, ErrorCode.RESPONSE_ERROR, 'Error generating response', {
+                        error: truncateLogValue(e && typeof e.message === 'string' ? e.message : String(e))
+                    });
+                    process = 'listening';
+                    updateUI();
+                } finally {
+                    clearTimeout(watchdog);
+                }
             }, 2000);
         }
 
@@ -950,7 +1135,8 @@
             const ratio = canvas.width / rect.width;
             const x = (e.clientX - rect.left) * ratio;
             const y = (e.clientY - rect.top) * ratio;
-            const word = e.dataTransfer.getData('text/plain') || 'surge';
+            const raw = e.dataTransfer.getData('text/plain');
+            const word = validateDragWord(raw) || 'surge';
             triggerBurst(x, y);
             triggerCatalyst(word, 'canvas');
         });
@@ -1084,14 +1270,14 @@
                 <div class="space-y-2">
                     <div class="bg-cyan-500 bg-opacity-20 p-3 rounded border border-cyan-400 transform transition hover:translate-x-1">
                         <div class="text-xs text-cyan-300 mb-1">YOU ${isListening ? 'SAID' : 'ASKED'}:</div>
-                        <div>${input}</div>
+                        <div>${sanitizeHTML(input)}</div>
                     </div>
                     <div class="bg-green-500 bg-opacity-20 p-3 rounded border border-green-400 transform transition hover:translate-x-1">
                         <div class="text-xs text-green-300 mb-1 flex justify-between">
-                            <span>GODMODE (${personaLabel} · feeling: ${feelingLabel}):</span>
-                            <span>${time}</span>
+                            <span>GODMODE (${sanitizeHTML(personaLabel)} · feeling: ${sanitizeHTML(feelingLabel)}):</span>
+                            <span>${sanitizeHTML(time)}</span>
                         </div>
-                        <div>${response}</div>
+                        <div>${sanitizeHTML(response)}</div>
                     </div>
                 </div>
             `;
