@@ -271,6 +271,8 @@
         // Sanitizes a value before injecting into innerHTML to prevent XSS.
         // All user-controlled strings (chat input, thought text, topics, secret words)
         // must pass through this before being inserted into the DOM.
+        // @param {*} str  Any value; coerced to string before escaping.
+        // @returns {string} HTML-safe string with &, <, >, ", ' replaced by entities.
         function escapeHTML(str) {
             return String(str)
                 .replace(/&/g, '&amp;')
@@ -284,6 +286,7 @@
         // All push sites use this helper — it is the single enforcement point.
         // The previous per-site 20-item limit in the setInterval tick has been
         // removed; MAX_THOUGHTS is now the sole cap across all code paths.
+        // @param {{ text: string, type: string, color: string, id: number, time: string }} entry
         const MAX_THOUGHTS = 50;
         function pushThought(entry) {
             thoughts.push(entry);
@@ -295,6 +298,8 @@
         // from hardcoded arrays, but a crafted localStorage payload could otherwise
         // smuggle a CSS expression through a stale thoughts reference.
         // Only accepts valid CSS hex lengths: 3, 4, 6, or 8 hex digits.
+        // @param {string} color  Candidate color value.
+        // @returns {string} The input color if valid; '#00ff87' (safe default) otherwise.
         function safeCSSColor(color) {
             return /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(color) ? color : '#00ff87';
         }
