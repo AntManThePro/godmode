@@ -23,7 +23,7 @@ If you discover a security vulnerability in this project, report it privately so
    Open a [Private Security Advisory](https://github.com/AntManThePro/godmode/security/advisories/new) directly in this repository. GitHub keeps the report confidential until a fix is released.
 
 2. **Email**  
-   If you prefer email, send details to the repository owner via the contact information listed on their [GitHub profile](https://github.com/AntManThePro). Use the subject line: `[SECURITY] GodMode Vulnerability Report`.
+   If you prefer email, send details to [security@antmanthepro.dev](mailto:security@antmanthepro.dev). Use the subject line: `[SECURITY] GodMode Vulnerability Report`.
 
 ### What to Include
 
