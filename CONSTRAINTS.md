@@ -86,7 +86,7 @@ Modules must not cache copies of `State` fields that can drift.
 | Neural animation | RAF-driven; one `_animateNeural()` frame per `requestAnimationFrame` callback |
 | WebGL render | Second RAF chain (`_renderGL`); auto-halts when `_gl` is `null` |
 | Particle lifetime | 10 DOM elements per trigger; auto-removed after 3 000 ms |
-| Thought buffer | Max 20 entries in `State.thoughts` (oldest shifted on overflow) |
+| Thought buffer | Appended to from multiple modules; no global 20-entry cap is currently enforced for `State.thoughts` |
 | Chat history | Max 20 entries persisted to `localStorage`; older entries discarded |
 | Topic memory | Max 12 topics retained in `localStorage` |
 | Agent task duration | Default 1 400 ms auto-reset; configurable per `delegateTo` call |
