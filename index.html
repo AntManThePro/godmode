@@ -301,25 +301,30 @@
         const memoryKey = 'godmode-memory-v2';
         const DEFAULT_AGENT_TASK_DURATION = 1400;
         const MAX_INPUT_LENGTH = 500;
+        const MAX_CATALYST_WORD_LENGTH = 64;
+        const MAX_LOG_VALUE_LENGTH = 64;
         const MAX_SPEECH_RETRIES = 2;
         const PROCESS_WATCHDOG_TIMEOUT_MS = 6000;
         const STORAGE_ROLLBACK_CHAT_LIMIT = Math.floor(MAX_STORED_CHATS / 2);
         const SPEECH_RETRIABLE_ERRORS = new Set(['network']);
-        const DRAG_WORD_RE = /^[a-zA-Z0-9 _'\-]{1,64}$/;
+        // Remove ' from character class to prevent attribute injection if context ever changes
+        const DRAG_WORD_RE = new RegExp(`^[a-zA-Z0-9 _\\-]{1,${MAX_CATALYST_WORD_LENGTH}}$`);
         // Only allow hex color notation to fully prevent CSS injection via url() or javascript:
         const CSS_COLOR_RE = /^#[0-9a-fA-F]{3,8}$/;
 
-        // ─── Error taxonomy ───────────────────────────────────────────────────
+        // ─── Log code taxonomy ────────────────────────────────────────────────
+        // ErrorCode covers fault events; success/info events use the _OK/_SUCCESS suffix
+        // to distinguish them from failure cases at a glance in logs.
         const ErrorCode = {
-            STORAGE_WRITE:       'STORAGE_WRITE',
-            STORAGE_READ:        'STORAGE_READ',
-            HYDRATION_CORRUPT:   'HYDRATION_CORRUPT',
-            HYDRATION_OK:        'HYDRATION_OK',
-            SPEECH_ERROR:        'SPEECH_ERROR',
-            STATE_STUCK:         'STATE_STUCK',
-            INPUT_INVALID:       'INPUT_INVALID',
-            INVARIANT_VIOLATION: 'INVARIANT_VIOLATION',
-            RESPONSE_ERROR:      'RESPONSE_ERROR'
+            STORAGE_WRITE:        'STORAGE_WRITE',
+            STORAGE_READ:         'STORAGE_READ',
+            HYDRATION_CORRUPT:    'HYDRATION_CORRUPT',
+            HYDRATION_SUCCESS:    'HYDRATION_SUCCESS',
+            SPEECH_ERROR:         'SPEECH_ERROR',
+            STATE_STUCK:          'STATE_STUCK',
+            INPUT_INVALID:        'INPUT_INVALID',
+            INVARIANT_VIOLATION:  'INVARIANT_VIOLATION',
+            RESPONSE_ERROR:       'RESPONSE_ERROR'
         };
         const L = { DEBUG: 0, INFO: 1, WARN: 2, ERROR: 3 };
         function log(level, code, message, data) {
@@ -457,7 +462,7 @@
             recognition.onerror = (event) => {
                 isListening = false;
                 document.body.classList.remove('listening');
-                log(L.WARN, ErrorCode.SPEECH_ERROR, 'Speech recognition error', { error: String(event.error || 'unknown').slice(0, 64) });
+                log(L.WARN, ErrorCode.SPEECH_ERROR, 'Speech recognition error', { error: String(event.error || 'unknown').slice(0, MAX_LOG_VALUE_LENGTH) });
                 if (SPEECH_RETRIABLE_ERRORS.has(event.error) && speechRetryCount < MAX_SPEECH_RETRIES) {
                     speechRetryCount++;
                     document.getElementById('voiceStatus').textContent = `🔄 Retrying… (${speechRetryCount}/${MAX_SPEECH_RETRIES})`;
@@ -568,7 +573,7 @@
                 ? data.chats.filter(c => c && typeof c.input === 'string' && typeof c.response === 'string').slice(-MAX_STORED_CHATS)
                 : [];
             const safeTopics = Array.isArray(data.topics)
-                ? data.topics.filter(t => typeof t === 'string' && t.length <= 64).slice(-MAX_STORED_TOPICS)
+                ? data.topics.filter(t => typeof t === 'string' && t.length <= MAX_CATALYST_WORD_LENGTH).slice(-MAX_STORED_TOPICS)
                 : [];
             const safeEvolution   = validateNumericField(data.evolution,   0, Infinity, 0);
             const safeConnections = validateNumericField(data.connections, 0, Infinity, 0);
@@ -587,7 +592,7 @@
                 renderTopics();
                 milestones.forEach(m => { if (evolution >= m.threshold) unlockedMilestones.add(m.threshold); });
                 setPersonality(personality, true);
-                log(L.INFO, ErrorCode.HYDRATION_OK, 'Session restored', { evolution, connections, topics: safeTopics.length });
+                log(L.INFO, ErrorCode.HYDRATION_SUCCESS, 'Session restored', { evolution, connections, topics: safeTopics.length });
                 delegateTo('mnemos', 'Session state restored from storage…', 1200);
             } catch (e) {
                 log(L.ERROR, ErrorCode.HYDRATION_CORRUPT, 'Error applying restored state', { error: e.message });
@@ -659,7 +664,7 @@
         }
 
         function triggerCatalyst(word, origin = 'playground', coords) {
-            const safeWord = String(word ?? 'impulse').slice(0, 64);
+            const safeWord = String(word ?? 'impulse').slice(0, MAX_CATALYST_WORD_LENGTH);
             const color = ['#00ff87', '#ff0080', '#60efff', '#ffcc00'][Math.floor(Math.random() * 4)];
             thoughts.push({ text: `Catalyst "${safeWord}" ignited pathways`, type: 'catalyst', color, id: Date.now(), time: new Date().toLocaleTimeString() });
             awareness = Math.min(awareness + CATALYST_AWARENESS_BOOST, 100);
