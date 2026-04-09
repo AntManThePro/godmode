@@ -287,7 +287,15 @@
         const MAX_THOUGHTS = 50;
         function pushThought(entry) {
             thoughts.push(entry);
-            if (thoughts.length > MAX_THOUGHTS) thoughts.splice(0, thoughts.length - MAX_THOUGHTS);
+            if (thoughts.length > MAX_THOUGHTS) thoughts.shift();
+        }
+
+        // Validates that a color string is a safe CSS hex color before injecting
+        // into an inline style attribute. Thought/agent/catalyst colors are sourced
+        // from hardcoded arrays, but a crafted localStorage payload could otherwise
+        // smuggle a CSS expression through a stale thoughts reference.
+        function safeCSSColor(color) {
+            return /^#[0-9a-fA-F]{3,8}$/.test(color) ? color : '#00ff87';
         }
 
         // State
@@ -632,15 +640,16 @@
             if (!grid) return;
             grid.innerHTML = agents.map(a => {
                 const active = a.status === 'active';
+                const safeColor = safeCSSColor(a.color);
                 return `
                     <div class="agent-card flex items-center gap-2 p-2 rounded border text-xs"
-                         style="color:${a.color}; border-color:${active ? a.color : 'rgba(255,255,255,0.1)'}; background:rgba(0,0,0,${active ? '0.55' : '0.25'}); ${active ? `box-shadow:0 0 12px ${a.color}55;` : ''}">
+                         style="color:${safeColor}; border-color:${active ? safeColor : 'rgba(255,255,255,0.1)'}; background:rgba(0,0,0,${active ? '0.55' : '0.25'}); ${active ? `box-shadow:0 0 12px ${safeColor}55;` : ''}">
                         <span class="text-base leading-none">${a.emoji}</span>
                         <div class="flex-1 min-w-0">
-                            <div class="font-bold tracking-wide">${a.name}</div>
-                            <div class="opacity-60 truncate">${a.role}</div>
+                            <div class="font-bold tracking-wide">${escapeHTML(a.name)}</div>
+                            <div class="opacity-60 truncate">${escapeHTML(a.role)}</div>
                         </div>
-                        <div class="agent-dot ${active ? 'agent-dot-active' : ''}" style="background:${a.color}"></div>
+                        <div class="agent-dot ${active ? 'agent-dot-active' : ''}" style="background:${safeColor}"></div>
                     </div>
                 `;
             }).join('');
@@ -894,9 +903,9 @@
             
             const stream = document.getElementById('thoughtStream');
             stream.innerHTML = thoughts.slice(-10).reverse().map(t => `
-                <div class="p-3 bg-black bg-opacity-30 rounded border-l-4 transform transition hover:translate-x-2" style="border-color: ${escapeHTML(t.color)}; box-shadow: 0 0 15px ${escapeHTML(t.color)}40">
+                <div class="p-3 bg-black bg-opacity-30 rounded border-l-4 transform transition hover:translate-x-2" style="border-color: ${safeCSSColor(t.color)}; box-shadow: 0 0 15px ${safeCSSColor(t.color)}40">
                     <div class="flex justify-between text-xs mb-1">
-                        <span style="color: ${escapeHTML(t.color)}" class="font-bold uppercase">${escapeHTML(t.type)}</span>
+                        <span style="color: ${safeCSSColor(t.color)}" class="font-bold uppercase">${escapeHTML(t.type)}</span>
                         <span class="opacity-75">${escapeHTML(t.time)}</span>
                     </div>
                     <div>${escapeHTML(t.text)}</div>
