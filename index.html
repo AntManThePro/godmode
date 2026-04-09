@@ -600,7 +600,7 @@
                 log(L.INFO, ErrorCode.HYDRATION_SUCCESS, 'Session restored', { evolution, connections, topics: safeTopics.length });
                 delegateTo('mnemos', 'Session state restored from storage…', 1200);
             } catch (e) {
-                log(L.ERROR, ErrorCode.HYDRATION_CORRUPT, 'Error applying restored state', { error: e.message });
+                log(L.ERROR, ErrorCode.HYDRATION_CORRUPT, 'Error applying restored state', { error: truncateLogValue(e.message) });
                 document.getElementById('memoryStatus').textContent = 'Unable to restore previous session. Starting fresh.';
             }
         }
