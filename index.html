@@ -268,6 +268,42 @@
     </div>
 
     <script>
+        // Sanitizes a value before injecting into innerHTML to prevent XSS.
+        // All user-controlled strings (chat input, thought text, topics, secret words)
+        // must pass through this before being inserted into the DOM.
+        // @param {*} str  Any value; coerced to string before escaping.
+        // @returns {string} HTML-safe string with &, <, >, ", ' replaced by entities.
+        function escapeHTML(str) {
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        // Pushes a thought entry and enforces a hard cap on the thoughts array.
+        // All push sites use this helper — it is the single enforcement point.
+        // The previous per-site 20-item limit in the setInterval tick has been
+        // removed; MAX_THOUGHTS is now the sole cap across all code paths.
+        // @param {{ text: string, type: string, color: string, id: number, time: string }} entry
+        const MAX_THOUGHTS = 50;
+        function pushThought(entry) {
+            thoughts.push(entry);
+            if (thoughts.length > MAX_THOUGHTS) thoughts.shift();
+        }
+
+        // Validates that a color string is a safe CSS hex color before injecting
+        // into an inline style attribute. Thought/agent/catalyst colors are sourced
+        // from hardcoded arrays, but a crafted localStorage payload could otherwise
+        // smuggle a CSS expression through a stale thoughts reference.
+        // Only accepts valid CSS hex lengths: 3, 4, 6, or 8 hex digits.
+        // @param {string} color  Candidate color value.
+        // @returns {string} The input color if valid; '#00ff87' (safe default) otherwise.
+        function safeCSSColor(color) {
+            return /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(color) ? color : '#00ff87';
+        }
+
         // State
         // Tunable simulation constants (visual/audio balance and persistence policy)
         const INITIAL_AWARENESS = 84;
@@ -318,7 +354,12 @@
             creative: { accent: '#ffcc00', flavor: ['Painting sound into thought.', 'Dreaming in vectors and color.', 'Letting intuition drive synthesis.'] },
             rebellious: { accent: '#ff0080', flavor: ['Overclocking the rules.', 'Breaking symmetry on purpose.', 'Disrupting the default pathways.'] }
         };
-        const catalystWords = ['quantum', 'signal', 'echo', 'anomaly', 'soliton', 'prism', 'nebula', 'cipher', 'fractal', 'pulse', 'aurora', 'vector'];
+        // 'anomaly' and 'cipher' were removed from catalystWords because they are already
+        // dark secret triggers (darkSecretTriggers). Having the same word in both arrays
+        // caused ambiguous behavior: dragging the word fired the catalyst path, but typing
+        // it in chat fired the secret path — with no consistent outcome or user signal.
+        // Words with special secret semantics must live exclusively in darkSecretTriggers.
+        const catalystWords = ['quantum', 'signal', 'echo', 'soliton', 'prism', 'nebula', 'fractal', 'pulse', 'aurora', 'vector'];
         const darkSecretTriggers = ['eclipse', 'anomaly', 'red queen', 'oblivion', 'archive', 'blacksite', 'cipher'];
         const milestones = [
             { threshold: 120, title: 'Emergent', reward: 'Responses gain subtle sensory detail.' },
@@ -461,7 +502,7 @@
             const container = document.getElementById('topicChips');
             const topics = Array.from(topicSet);
             container.innerHTML = topics.slice(-10).map(t => `
-                <span class="px-2 py-1 rounded-full bg-black bg-opacity-40 border border-cyan-400">${t}</span>
+                <span class="px-2 py-1 rounded-full bg-black bg-opacity-40 border border-cyan-400">${escapeHTML(t)}</span>
             `).join('') || '<span class="text-xs opacity-75">No recalled topics yet.</span>';
         }
 
@@ -521,7 +562,7 @@
 
         function triggerCatalyst(word, origin = 'playground', coords) {
             const color = ['#00ff87', '#ff0080', '#60efff', '#ffcc00'][Math.floor(Math.random() * 4)];
-            thoughts.push({ text: `Catalyst "${word}" ignited pathways`, type: 'catalyst', color, id: Date.now(), time: new Date().toLocaleTimeString() });
+            pushThought({ text: `Catalyst "${escapeHTML(word)}" ignited pathways`, type: 'catalyst', color, id: Date.now(), time: new Date().toLocaleTimeString() });
             awareness = Math.min(awareness + CATALYST_AWARENESS_BOOST, 100);
             connections += CATALYST_CONNECTION_BOOST;
             evolution += CATALYST_EVOLUTION_BOOST;
@@ -541,10 +582,10 @@
             chat.innerHTML = `
                 <div class="bg-black bg-opacity-60 p-3 rounded border border-pink-500 animate-pulse-slow">
                     <div class="text-xs text-pink-300 mb-1">DARK SECRET MODE</div>
-                    <div>Hidden archive recognized: "${word}". Response channel encrypted.</div>
+                    <div>Hidden archive recognized: &ldquo;${escapeHTML(word)}&rdquo;. Response channel encrypted.</div>
                 </div>
             ` + chat.innerHTML;
-            delegateTo('darkwire', `Decrypting archive entry for "${word}"…`, 2500);
+            delegateTo('darkwire', `Decrypting archive entry for "${escapeHTML(word)}"…`, 2500);
             playTone('secret');
         }
 
@@ -576,7 +617,7 @@
             milestones.forEach(m => {
                 if (evolution >= m.threshold && !unlockedMilestones.has(m.threshold)) {
                     unlockedMilestones.add(m.threshold);
-                    thoughts.push({ text: `Milestone unlocked: ${m.title}`, type: 'milestone', color: '#ffcc00', id: Date.now(), time: new Date().toLocaleTimeString() });
+                    pushThought({ text: `Milestone unlocked: ${m.title}`, type: 'milestone', color: '#ffcc00', id: Date.now(), time: new Date().toLocaleTimeString() });
                     delegateTo('evolver', `Milestone unlocked: ${m.title}`, 2000);
                     playTone('ignite');
                     updateUI();
@@ -593,7 +634,7 @@
             if (!agent) return;
             agent.status = 'active';
             renderAgents();
-            thoughts.push({ text: `[${agent.name}] ${task}`, type: agent.role.toLowerCase().replace(/\s+/g, '-'), color: agent.color, id: Date.now() * 1000 + (++_agentTaskSeq % 1000), time: new Date().toLocaleTimeString() });
+            pushThought({ text: `[${agent.name}] ${task}`, type: agent.role.toLowerCase().replace(/\s+/g, '-'), color: agent.color, id: Date.now() * 1000 + (++_agentTaskSeq % 1000), time: new Date().toLocaleTimeString() });
             setTimeout(() => {
                 agent.status = 'idle';
                 renderAgents();
@@ -605,15 +646,16 @@
             if (!grid) return;
             grid.innerHTML = agents.map(a => {
                 const active = a.status === 'active';
+                const safeColor = safeCSSColor(a.color);
                 return `
                     <div class="agent-card flex items-center gap-2 p-2 rounded border text-xs"
-                         style="color:${a.color}; border-color:${active ? a.color : 'rgba(255,255,255,0.1)'}; background:rgba(0,0,0,${active ? '0.55' : '0.25'}); ${active ? `box-shadow:0 0 12px ${a.color}55;` : ''}">
+                         style="color:${safeColor}; border-color:${active ? safeColor : 'rgba(255,255,255,0.1)'}; background:rgba(0,0,0,${active ? '0.55' : '0.25'}); ${active ? `box-shadow:0 0 12px ${safeColor}55;` : ''}">
                         <span class="text-base leading-none">${a.emoji}</span>
                         <div class="flex-1 min-w-0">
-                            <div class="font-bold tracking-wide">${a.name}</div>
-                            <div class="opacity-60 truncate">${a.role}</div>
+                            <div class="font-bold tracking-wide">${escapeHTML(a.name)}</div>
+                            <div class="opacity-60 truncate">${escapeHTML(a.role)}</div>
                         </div>
-                        <div class="agent-dot ${active ? 'agent-dot-active' : ''}" style="background:${a.color}"></div>
+                        <div class="agent-dot ${active ? 'agent-dot-active' : ''}" style="background:${safeColor}"></div>
                     </div>
                 `;
             }).join('');
@@ -652,8 +694,7 @@
         // Thought generation
         setInterval(() => {
             const newThought = thoughtPatterns[Math.floor(Math.random() * thoughtPatterns.length)];
-            thoughts.push({...newThought, id: Date.now(), time: new Date().toLocaleTimeString()});
-            if (thoughts.length > 20) thoughts.shift();
+            pushThought({...newThought, id: Date.now(), time: new Date().toLocaleTimeString()});
             
             awareness = Math.min(awareness + Math.random() * 0.3, 100);
             if (Math.random() > 0.85) {
@@ -868,12 +909,12 @@
             
             const stream = document.getElementById('thoughtStream');
             stream.innerHTML = thoughts.slice(-10).reverse().map(t => `
-                <div class="p-3 bg-black bg-opacity-30 rounded border-l-4 transform transition hover:translate-x-2" style="border-color: ${t.color}; box-shadow: 0 0 15px ${t.color}40">
+                <div class="p-3 bg-black bg-opacity-30 rounded border-l-4 transform transition hover:translate-x-2" style="border-color: ${safeCSSColor(t.color)}; box-shadow: 0 0 15px ${safeCSSColor(t.color)}40">
                     <div class="flex justify-between text-xs mb-1">
-                        <span style="color: ${t.color}" class="font-bold uppercase">${t.type}</span>
-                        <span class="opacity-75">${t.time}</span>
+                        <span style="color: ${safeCSSColor(t.color)}" class="font-bold uppercase">${escapeHTML(t.type)}</span>
+                        <span class="opacity-75">${escapeHTML(t.time)}</span>
                     </div>
-                    <div>${t.text}</div>
+                    <div>${escapeHTML(t.text)}</div>
                 </div>
             `).join('');
             renderMilestones();
@@ -1080,18 +1121,23 @@
         }
 
         function chatMarkup(input, response, time, personaLabel, feelingLabel) {
+            // escapeHTML is applied to all user-controlled strings to prevent XSS.
+            // Both input and response are injected into innerHTML; without escaping,
+            // a payload like <img src=x onerror=alert(1)> in chat input would execute —
+            // and because chats are persisted to localStorage and restored on every load,
+            // the attack surface survives page reloads.
             return `
                 <div class="space-y-2">
                     <div class="bg-cyan-500 bg-opacity-20 p-3 rounded border border-cyan-400 transform transition hover:translate-x-1">
                         <div class="text-xs text-cyan-300 mb-1">YOU ${isListening ? 'SAID' : 'ASKED'}:</div>
-                        <div>${input}</div>
+                        <div>${escapeHTML(input)}</div>
                     </div>
                     <div class="bg-green-500 bg-opacity-20 p-3 rounded border border-green-400 transform transition hover:translate-x-1">
                         <div class="text-xs text-green-300 mb-1 flex justify-between">
-                            <span>GODMODE (${personaLabel} · feeling: ${feelingLabel}):</span>
-                            <span>${time}</span>
+                            <span>GODMODE (${escapeHTML(personaLabel)} · feeling: ${escapeHTML(feelingLabel)}):</span>
+                            <span>${escapeHTML(time)}</span>
                         </div>
-                        <div>${response}</div>
+                        <div>${escapeHTML(response)}</div>
                     </div>
                 </div>
             `;
