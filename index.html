@@ -1251,14 +1251,21 @@
 
                 GodModeAdapter.configure({ endpoint, apiKey, model });
 
-                // Persist non-sensitive fields only.
-                try {
-                    localStorage.setItem(ADAPTER_CONFIG_KEY, JSON.stringify({ endpoint, model }));
-                } catch (_) { /* storage unavailable — ignore */ }
-
+                const status = GodModeAdapter.status();
                 updateAdapterStatus();
-                setAdapterMessage('Adapter configured. Use "Test Connection" to verify.', 'ok');
-                delegateTo('mnemos', 'Adapter endpoint saved to storage…', 900);
+
+                if (status && status.state === 'ready') {
+                    // Persist non-sensitive fields only.
+                    try {
+                        localStorage.setItem(ADAPTER_CONFIG_KEY, JSON.stringify({ endpoint, model }));
+                    } catch (_) { /* storage unavailable — ignore */ }
+
+                    setAdapterMessage('Adapter configured. Use "Test Connection" to verify.', 'ok');
+                    delegateTo('mnemos', 'Adapter endpoint saved to storage…', 900);
+                    return;
+                }
+
+                setAdapterMessage(status?.error || 'Adapter configuration failed. Please verify the endpoint, API key, and model.', 'error');
             });
 
             // Test button — fire a minimal live request.
