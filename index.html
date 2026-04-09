@@ -567,7 +567,7 @@
             try {
                 data = JSON.parse(raw);
             } catch (e) {
-                log(L.ERROR, ErrorCode.HYDRATION_CORRUPT, 'Saved state is corrupt JSON — clearing', { error: e.message });
+                log(L.ERROR, ErrorCode.HYDRATION_CORRUPT, 'Saved state is corrupt JSON — clearing', { error: truncateLogValue(e.message) });
                 try { localStorage.removeItem(memoryKey); } catch (_) {}
                 document.getElementById('memoryStatus').textContent = 'Corrupted state cleared. Starting fresh.';
                 return;
