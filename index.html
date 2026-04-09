@@ -558,7 +558,7 @@
             try {
                 raw = localStorage.getItem(memoryKey);
             } catch (e) {
-                log(L.ERROR, ErrorCode.STORAGE_READ, 'localStorage read failed', { error: e.message });
+                log(L.ERROR, ErrorCode.STORAGE_READ, 'localStorage read failed', { error: truncateLogValue(e.message) });
                 document.getElementById('memoryStatus').textContent = 'Storage unavailable. Starting fresh.';
                 return;
             }
