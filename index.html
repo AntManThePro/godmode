@@ -900,10 +900,23 @@
             renderTopics() {
                 const container = document.getElementById('topicChips');
                 if (!container) return;
-                const topics = Array.from(State.topicSet);
-                container.innerHTML = topics.slice(-10).map(t =>
-                    `<span class="px-2 py-1 rounded-full bg-black bg-opacity-40 border border-cyan-400">${t}</span>`
-                ).join('') || '<span class="text-xs opacity-75">No recalled topics yet.</span>';
+                const topics = Array.from(State.topicSet).slice(-10);
+                container.replaceChildren();
+
+                if (!topics.length) {
+                    const empty = document.createElement('span');
+                    empty.className = 'text-xs opacity-75';
+                    empty.textContent = 'No recalled topics yet.';
+                    container.appendChild(empty);
+                    return;
+                }
+
+                topics.forEach(t => {
+                    const chip = document.createElement('span');
+                    chip.className = 'px-2 py-1 rounded-full bg-black bg-opacity-40 border border-cyan-400';
+                    chip.textContent = t;
+                    container.appendChild(chip);
+                });
             },
 
             _chatMarkup(input, response, time, personality, emotion, fromVoice = false) {
