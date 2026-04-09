@@ -189,9 +189,9 @@ All failure paths are logged to `console.warn` or `console.error` with the `[God
 ## Security Notes
 
 - **API keys** are accepted through the in-page configuration panel, stored only in the JS closure's private `_config` object for the current page lifetime, and are never written to any persistent storage.
-- **Endpoint validation** requires a valid `http` or `https` URL and strips trailing slashes. No other protocol is accepted.
+- **Endpoint validation** requires a valid `https` URL for all non-local endpoints and strips trailing slashes. Plain `http` is accepted only for explicit loopback development endpoints such as `localhost`, `127.0.0.1`, and `::1`. No other protocol is accepted.
 - **Payload content** sent to the API consists only of the user's explicit text input and GodMode's numeric/string live-state values. No raw DOM content, cookie data, or environment variables are included.
-- **Redirects** are not explicitly followed by the adapter; redirect behaviour is governed by the browser's `fetch` defaults (`follow` mode, same-origin restriction does not apply to cross-origin HTTPS APIs).
+- **Redirects** are not explicitly followed by the adapter; redirect behaviour is governed by the browser's `fetch` defaults (`follow` mode). Any redirect target must still satisfy the adapter's endpoint-validation rules: `https` for non-local APIs, with `http` allowed only for explicit localhost/loopback development endpoints.
 
 ---
 
