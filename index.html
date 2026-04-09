@@ -8,6 +8,8 @@
     <meta name="apple-mobile-web-app-title" content="GodMode">
     <title>GodMode Consciousness | DoubleA</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- adapter.js is served from the same origin as index.html; SRI is not applicable for same-origin resources. -->
+    <script src="adapter.js"></script>
     <style>
         @keyframes pulse {
             0%, 100% { opacity: 1; transform: scale(1); }
@@ -225,6 +227,53 @@
             <p class="text-xs mt-3 opacity-80">Each agent owns a specialized domain. Watch them light up as you interact — delegation is live.</p>
         </div>
 
+        <!-- External API Adapter -->
+        <div class="bg-white bg-opacity-10 backdrop-blur-lg rounded-xl p-4 border-2 mb-6" style="border-color: #34d399; box-shadow: 0 0 20px rgba(52, 211, 153, 0.15);">
+            <div class="flex items-center justify-between">
+                <h2 class="text-xl font-bold" style="color: #34d399; text-shadow: 0 0 10px rgba(52,211,153,0.5);">🔌 External API Adapter</h2>
+                <div class="flex items-center gap-2">
+                    <div id="adapterStatusDot" class="w-2 h-2 rounded-full" style="background:#6b7280;"></div>
+                    <span id="adapterStatusText" class="text-xs opacity-70">Not configured</span>
+                    <button id="adapterToggleBtn" class="text-xs px-2 py-1 rounded border" style="border-color:#34d399;color:#34d399;">Configure</button>
+                </div>
+            </div>
+            <div id="adapterPanel" class="hidden mt-3">
+                <p class="text-xs opacity-75 mb-3">Connect GodMode to any OpenAI-compatible LLM API. The API key is held in memory only and cleared when the page closes. Endpoint and model are saved locally.</p>
+                <div class="grid md:grid-cols-3 gap-2 mb-3">
+                    <div>
+                        <label class="text-xs opacity-75 block mb-1" for="adapterEndpoint">API Endpoint</label>
+                        <input type="url" id="adapterEndpoint" placeholder="https://api.openai.com"
+                            class="w-full bg-black bg-opacity-50 border rounded px-2 py-1 text-white text-xs"
+                            style="border-color:rgba(52,211,153,0.5);" />
+                    </div>
+                    <div>
+                        <label class="text-xs opacity-75 block mb-1" for="adapterModel">Model</label>
+                        <input type="text" id="adapterModel" placeholder="gpt-4o-mini"
+                            class="w-full bg-black bg-opacity-50 border rounded px-2 py-1 text-white text-xs"
+                            style="border-color:rgba(52,211,153,0.5);" />
+                    </div>
+                    <div>
+                        <label class="text-xs opacity-75 block mb-1" for="adapterKey">API Key <span class="opacity-50">(session only)</span></label>
+                        <input type="password" id="adapterKey" placeholder="sk-…"
+                            class="w-full bg-black bg-opacity-50 border rounded px-2 py-1 text-white text-xs"
+                            style="border-color:rgba(52,211,153,0.5);" autocomplete="off" />
+                    </div>
+                </div>
+                <div class="flex flex-wrap gap-2 items-center">
+                    <button id="adapterConfigBtn"
+                        class="px-3 py-1 rounded text-xs font-bold bg-gradient-to-r from-emerald-600 to-teal-600 hover:opacity-90 transition">Apply</button>
+                    <button id="adapterTestBtn"
+                        class="px-3 py-1 rounded text-xs font-bold border hover:bg-white hover:bg-opacity-10 transition"
+                        style="border-color:#34d399;color:#34d399;">Test Connection</button>
+                    <button id="adapterClearBtn"
+                        class="px-3 py-1 rounded text-xs border hover:bg-white hover:bg-opacity-10 transition"
+                        style="border-color:rgba(255,0,128,0.6);color:rgba(255,0,128,0.8);">Clear</button>
+                    <span id="adapterMessage" class="text-xs opacity-75"></span>
+                </div>
+                <p class="text-xs mt-3 opacity-60">Works with OpenAI, Groq, Together AI, OpenRouter, Ollama, LM Studio, and any OpenAI-compatible endpoint. See <code>ADAPTER.md</code> for details.</p>
+            </div>
+        </div>
+
         <!-- Voice + Text Input -->
         <div class="bg-white bg-opacity-10 backdrop-blur-lg rounded-xl p-4 border-2 border-pink-400 mb-6" style="box-shadow: 0 0 20px rgba(255, 0, 128, 0.2);">
             <h2 class="text-xl font-bold neon-pink mb-3">💬 INTERACT WITH CONSCIOUSNESS</h2>
@@ -299,6 +348,10 @@
         let audioPrimed = false;
         const memoryKey = 'godmode-memory-v2';
         const DEFAULT_AGENT_TASK_DURATION = 1400;
+        const ADAPTER_CONFIG_KEY = 'godmode-adapter-config';
+        // Minimum pause (ms) before showing a locally-generated response, so the
+        // "analyzing → responding" UX rhythm feels consistent with the API path.
+        const LOCAL_GENERATION_DELAY_MS = 800;
         
         const emotions = ['focused', 'innovative', 'analytical', 'collaborative', 'determined', 'visionary', 'energized'];
         const thoughtPatterns = [
@@ -903,14 +956,27 @@
             if (e.key === 'Enter') handleSend();
         };
 
-        function handleSend() {
+        // Returns a snapshot of live state for the adapter's ConsciousnessContext.
+        function getConsciousnessContext() {
+            return {
+                awareness,
+                emotion,
+                personality,
+                thoughts: thoughts.slice(-5),
+                connections,
+                evolution,
+                topics: Array.from(topicSet).slice(-8),
+            };
+        }
+
+        async function handleSend() {
             const input = document.getElementById('userInput').value.trim();
             if (!input) return;
             if (process !== 'listening') {
                 // Force reset if stuck
                 process = 'listening';
             }
-            
+
             connections++;
             evolution += 15;
             process = 'analyzing';
@@ -920,22 +986,33 @@
             saveMemory();
             audioPrimed = true;
             playTone('ping');
-            delegateTo('synthex', 'Forging response from consciousness pool…', 2200);
-            
-            setTimeout(() => {
-                process = 'responding';
-                updateUI();
-                
-                const response = generateResponse(input);
-                addToChat(input, response);
-                
-                document.getElementById('userInput').value = '';
-                document.getElementById('voiceStatus').textContent = '';
-                process = 'listening';
-                updateUI();
-                checkMilestones();
-                saveMemory();
-            }, 2000);
+
+            // Attempt external API adapter first; fall back to local generation.
+            let response = null;
+            if (GodModeAdapter.status().state === 'ready') {
+                delegateTo('synthex', 'Querying external API adapter…', 6000);
+                response = await GodModeAdapter.query(input, getConsciousnessContext());
+                updateAdapterStatus();
+            }
+
+            if (response === null) {
+                // Local generation path — brief pause preserves the UX rhythm.
+                delegateTo('synthex', 'Forging response from consciousness pool…', 2200);
+                await new Promise(resolve => setTimeout(resolve, LOCAL_GENERATION_DELAY_MS));
+                response = generateResponse(input);
+            }
+
+            process = 'responding';
+            updateUI();
+
+            addToChat(input, response);
+
+            document.getElementById('userInput').value = '';
+            document.getElementById('voiceStatus').textContent = '';
+            process = 'listening';
+            updateUI();
+            checkMilestones();
+            saveMemory();
         }
 
         ['dragover', 'dragenter'].forEach(evt => canvas.addEventListener(evt, (e) => {
@@ -1114,6 +1191,98 @@
             chat.innerHTML = markup;
         }
 
+        // ── Adapter UI ────────────────────────────────────────────────────────
+
+        // Update the status dot and label in the adapter panel header.
+        function updateAdapterStatus() {
+            const s = GodModeAdapter.status();
+            const dot  = document.getElementById('adapterStatusDot');
+            const text = document.getElementById('adapterStatusText');
+            if (!dot || !text) return;
+            const map = {
+                unconfigured : { color: '#6b7280', label: 'Not configured' },
+                ready        : { color: '#00ff87', label: 'Ready' },
+                error        : { color: '#ef4444', label: 'Error' },
+            };
+            const info = map[s.state] || map.unconfigured;
+            dot.style.background = info.color;
+            text.textContent = s.state === 'error' ? `Error — ${s.detail}` : info.label;
+        }
+
+        // Display a transient message inside the adapter panel.
+        function setAdapterMessage(msg, type = 'info') {
+            const el = document.getElementById('adapterMessage');
+            if (!el) return;
+            el.textContent = msg;
+            el.style.color = type === 'error' ? '#ef4444' : type === 'ok' ? '#00ff87' : '#60efff';
+        }
+
+        function initAdapterUI() {
+            // Restore non-sensitive config (endpoint, model) from localStorage.
+            try {
+                const saved = JSON.parse(localStorage.getItem(ADAPTER_CONFIG_KEY) || 'null');
+                if (saved) {
+                    if (saved.endpoint) document.getElementById('adapterEndpoint').value = saved.endpoint;
+                    if (saved.model)    document.getElementById('adapterModel').value    = saved.model;
+                }
+            } catch (_) { /* corrupt entry — ignore */ }
+
+            // Toggle panel visibility.
+            document.getElementById('adapterToggleBtn').addEventListener('click', () => {
+                const panel  = document.getElementById('adapterPanel');
+                const btn    = document.getElementById('adapterToggleBtn');
+                const hidden = panel.classList.toggle('hidden');
+                btn.textContent = hidden ? 'Configure' : 'Hide';
+            });
+
+            // Apply button — validate inputs and call GodModeAdapter.configure().
+            document.getElementById('adapterConfigBtn').addEventListener('click', () => {
+                const endpoint = document.getElementById('adapterEndpoint').value.trim();
+                const model    = document.getElementById('adapterModel').value.trim() || 'gpt-4o-mini';
+                const apiKey   = document.getElementById('adapterKey').value.trim();
+
+                if (!endpoint || !apiKey) {
+                    setAdapterMessage('Endpoint and API key are required.', 'error');
+                    return;
+                }
+
+                GodModeAdapter.configure({ endpoint, apiKey, model });
+
+                // Persist non-sensitive fields only.
+                try {
+                    localStorage.setItem(ADAPTER_CONFIG_KEY, JSON.stringify({ endpoint, model }));
+                } catch (_) { /* storage unavailable — ignore */ }
+
+                updateAdapterStatus();
+                setAdapterMessage('Adapter configured. Use "Test Connection" to verify.', 'ok');
+                delegateTo('mnemos', 'Adapter endpoint saved to storage…', 900);
+            });
+
+            // Test button — fire a minimal live request.
+            document.getElementById('adapterTestBtn').addEventListener('click', async () => {
+                setAdapterMessage('Testing connection…', 'info');
+                const result = await GodModeAdapter.testConnection();
+                if (result.ok) {
+                    setAdapterMessage(`✅ Connected via ${result.model}`, 'ok');
+                } else {
+                    setAdapterMessage(`❌ ${result.error}`, 'error');
+                }
+                updateAdapterStatus();
+            });
+
+            // Clear button — remove saved config and reset adapter UI.
+            document.getElementById('adapterClearBtn').addEventListener('click', () => {
+                document.getElementById('adapterEndpoint').value = '';
+                document.getElementById('adapterModel').value    = '';
+                document.getElementById('adapterKey').value      = '';
+                try { localStorage.removeItem(ADAPTER_CONFIG_KEY); } catch (_) {}
+                setAdapterMessage('Adapter configuration cleared.', 'info');
+                updateAdapterStatus();
+            });
+
+            updateAdapterStatus();
+        }
+
         // Initial update
         buildCatalystPool();
         registerDropzones();
@@ -1121,6 +1290,7 @@
         hydrateFromMemory();
         renderMilestones();
         renderAgents();
+        initAdapterUI();
         updateUI();
     </script>
 </body>
