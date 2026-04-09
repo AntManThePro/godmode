@@ -53,7 +53,7 @@ These are best-effort targets. Complex issues may take longer; you'll be kept in
 
 We follow a **coordinated disclosure** model:
 
-- **Give us time.** Please allow a reasonable window (at minimum 14 days) to address the issue before making any public disclosure.
+- **Give us time.** Please allow a reasonable window to address the issue before making any public disclosure: at minimum **14 days** for critical/high severity issues and **30 days** for medium/low severity issues, unless we mutually agree on a different timeline.
 - **No automated scanning abuse.** Do not run aggressive automated scanners or denial-of-service tests against the live demo or any infrastructure tied to this project.
 - **No data exfiltration.** If the vulnerability involves accessing data, demonstrate the vulnerability exists without actually reading, storing, or transmitting any data beyond what is necessary.
 - **Act in good faith.** Research conducted in a responsible manner, with the goal of improving security, is appreciated and will be treated with respect.
