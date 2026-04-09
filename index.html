@@ -869,8 +869,11 @@
         };
 
         // ============================================================
-        // UIModule — all DOM read/write operations (SYNTHEX)
-        // Constraint: only UIModule may write to display elements.
+        // UIModule — primary shared UI rendering and DOM coordination (SYNTHEX)
+        // Guideline: UIModule owns most state-driven display updates, but some
+        // feature modules also perform localized DOM writes for their own
+        // status/interaction elements. Keep shared display rendering centralized
+        // here where practical.
         // ============================================================
         const UIModule = {
             update() {
