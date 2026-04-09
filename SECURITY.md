@@ -59,7 +59,7 @@ We follow a **coordinated disclosure** model:
 - **Act in good faith.** Research conducted in a responsible manner, with the goal of improving security, is appreciated and will be treated with respect.
 - **Credit.** Researchers who responsibly disclose valid vulnerabilities will be credited in the release notes unless they prefer to remain anonymous.
 
-We will not pursue legal action against researchers who follow these guidelines.
+To the fullest extent permitted by law, we do not intend to pursue legal action against researchers who act in good faith and follow these guidelines.
 
 ---
 
