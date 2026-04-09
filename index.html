@@ -1228,11 +1228,14 @@
             } catch (_) { /* corrupt entry — ignore */ }
 
             // Toggle panel visibility.
-            document.getElementById('adapterToggleBtn').addEventListener('click', () => {
-                const panel  = document.getElementById('adapterPanel');
-                const btn    = document.getElementById('adapterToggleBtn');
-                const hidden = panel.classList.toggle('hidden');
-                btn.textContent = hidden ? 'Configure' : 'Hide';
+            const adapterPanel = document.getElementById('adapterPanel');
+            const adapterToggleBtn = document.getElementById('adapterToggleBtn');
+            adapterToggleBtn.setAttribute('aria-controls', 'adapterPanel');
+            adapterToggleBtn.setAttribute('aria-expanded', String(!adapterPanel.classList.contains('hidden')));
+            adapterToggleBtn.addEventListener('click', () => {
+                const hidden = adapterPanel.classList.toggle('hidden');
+                adapterToggleBtn.textContent = hidden ? 'Configure' : 'Hide';
+                adapterToggleBtn.setAttribute('aria-expanded', String(!hidden));
             });
 
             // Apply button — validate inputs and call GodModeAdapter.configure().
