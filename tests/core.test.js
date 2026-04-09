@@ -396,6 +396,7 @@ describe('selectResponsePool', () => {
         ['how do you feel right now',  'feeling'],
         ['what emotions do you have',  'feeling'],
         ['what are you thinking',      'identity'],  // "what are you" matched before "think"
+        ['I am thinking about this',   'thinking'],  // verifies thinking pool is reachable
         ['share your thoughts',        'thinking'],
         ['are you real',               'reality'],
         ['do you exist',               'reality'],

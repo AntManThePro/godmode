@@ -304,4 +304,8 @@ if (typeof module !== 'undefined' && module.exports) {
     module.exports = _exports;
 } else if (typeof window !== 'undefined') {
     window.GodModeCore = _exports;
+} else {
+    // Safety net: should not occur in supported environments (Node.js, browser)
+    // but surfaces the error if loaded in an unexpected module system.
+    console.warn('[GodModeCore] Unsupported module environment — exports unavailable.');
 }
