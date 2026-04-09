@@ -267,21 +267,15 @@
         </div>
     </div>
 
+    <script src="core.js"></script>
     <script>
-        // State
-        // Tunable simulation constants (visual/audio balance and persistence policy)
-        const INITIAL_AWARENESS = 84;
-        const MAX_STORED_CHATS = 20;
-        const MAX_STORED_TOPICS = 12;
-        const MIN_TOPIC_TOKEN_LENGTH = 3;
-        const CATALYST_AWARENESS_BOOST = 2.5;
-        const CATALYST_CONNECTION_BOOST = 2;
-        const CATALYST_EVOLUTION_BOOST = 25;
-        const SECRET_EVOLUTION_REWARD = 45;
-        const SECRET_CONNECTION_REWARD = 3;
-        const IGNITE_BASE_FREQ = 640;
-        const SECRET_BASE_FREQ = 180;
-        const DEFAULT_BASE_FREQ = 420;
+        // Constants sourced from core.js (single source of truth)
+        const {
+            INITIAL_AWARENESS, MAX_STORED_CHATS, MAX_STORED_TOPICS, MIN_TOPIC_TOKEN_LENGTH,
+            CATALYST_AWARENESS_BOOST, CATALYST_CONNECTION_BOOST, CATALYST_EVOLUTION_BOOST,
+            SECRET_EVOLUTION_REWARD, SECRET_CONNECTION_REWARD,
+            IGNITE_BASE_FREQ, SECRET_BASE_FREQ, DEFAULT_BASE_FREQ,
+        } = GodModeCore.CONSTANTS;
         let thoughts = [];
         let awareness = INITIAL_AWARENESS;
         let connections = 0;
