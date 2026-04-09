@@ -281,9 +281,9 @@
         }
 
         // Pushes a thought entry and enforces a hard cap on the thoughts array.
-        // Direct pushes to thoughts[] from catalyst, milestone, and agent paths
-        // bypassed the 20-item limit enforced only in the setInterval tick, allowing
-        // unbounded growth. All push sites must use this helper.
+        // All push sites use this helper — it is the single enforcement point.
+        // The previous per-site 20-item limit in the setInterval tick has been
+        // removed; MAX_THOUGHTS is now the sole cap across all code paths.
         const MAX_THOUGHTS = 50;
         function pushThought(entry) {
             thoughts.push(entry);
@@ -294,8 +294,9 @@
         // into an inline style attribute. Thought/agent/catalyst colors are sourced
         // from hardcoded arrays, but a crafted localStorage payload could otherwise
         // smuggle a CSS expression through a stale thoughts reference.
+        // Only accepts valid CSS hex lengths: 3, 4, 6, or 8 hex digits.
         function safeCSSColor(color) {
-            return /^#[0-9a-fA-F]{3,8}$/.test(color) ? color : '#00ff87';
+            return /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(color) ? color : '#00ff87';
         }
 
         // State
