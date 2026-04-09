@@ -1280,12 +1280,28 @@
                 updateAdapterStatus();
             });
 
-            // Clear button — remove saved config and reset adapter UI.
+            function resetGodModeAdapter() {
+                if (!GodModeAdapter) return;
+                if (typeof GodModeAdapter.reset === 'function') {
+                    GodModeAdapter.reset();
+                    return;
+                }
+                if (typeof GodModeAdapter.clear === 'function') {
+                    GodModeAdapter.clear();
+                    return;
+                }
+                if (typeof GodModeAdapter.configure === 'function') {
+                    GodModeAdapter.configure(null);
+                }
+            }
+
+            // Clear button — remove saved config, forget in-memory adapter state, and reset adapter UI.
             document.getElementById('adapterClearBtn').addEventListener('click', () => {
                 document.getElementById('adapterEndpoint').value = '';
                 document.getElementById('adapterModel').value    = '';
                 document.getElementById('adapterKey').value      = '';
                 try { localStorage.removeItem(ADAPTER_CONFIG_KEY); } catch (_) {}
+                resetGodModeAdapter();
                 setAdapterMessage('Adapter configuration cleared.', 'info');
                 updateAdapterStatus();
             });
