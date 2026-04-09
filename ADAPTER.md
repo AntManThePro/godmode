@@ -148,7 +148,7 @@ Never break character or describe yourself as an AI assistant made by a third pa
 
 ### User Input → User Message
 
-Passed verbatim as the `user` role message. No escaping, filtering, or wrapping is applied.
+Passed as the `user` role message after trimming leading and trailing whitespace. No escaping, filtering, or wrapping is applied beyond that trimming step.
 
 ### API Response → Return Value
 
