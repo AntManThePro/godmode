@@ -307,7 +307,8 @@
         const PROCESS_WATCHDOG_TIMEOUT_MS = 6000;
         const STORAGE_ROLLBACK_CHAT_LIMIT = Math.floor(MAX_STORED_CHATS / 2);
         const SPEECH_RETRIABLE_ERRORS = new Set(['network']);
-        // Remove ' from character class to prevent attribute injection if context ever changes
+        // Intentionally excludes quotes and other special characters to prevent
+        // HTML attribute injection; length enforced by MAX_CATALYST_WORD_LENGTH.
         const DRAG_WORD_RE = new RegExp(`^[a-zA-Z0-9 _\\-]{1,${MAX_CATALYST_WORD_LENGTH}}$`);
         // Only allow hex color notation to fully prevent CSS injection via url() or javascript:
         const CSS_COLOR_RE = /^#[0-9a-fA-F]{3,8}$/;
@@ -472,7 +473,7 @@
                     document.getElementById('voiceStatus').textContent = `🔄 Retrying… (${speechRetryCount}/${MAX_SPEECH_RETRIES})`;
                     setTimeout(() => {
                         try { recognition.start(); } catch (e) {
-                            log(L.ERROR, ErrorCode.SPEECH_ERROR, 'Speech retry failed', { error: truncateLogValue(e.message) });
+                            log(L.ERROR, ErrorCode.SPEECH_ERROR, 'Speech retry failed', { error: truncateLogValue(e) });
                             document.getElementById('voiceStatus').textContent = '❌ Speech unavailable';
                             setTimeout(() => { document.getElementById('voiceStatus').textContent = ''; }, 3000);
                         }
@@ -577,7 +578,7 @@
                 ? data.chats.filter(c => c && typeof c.input === 'string' && typeof c.response === 'string').slice(-MAX_STORED_CHATS)
                 : [];
             const safeTopics = Array.isArray(data.topics)
-                ? data.topics.filter(t => typeof t === 'string' && t.length <= MAX_CATALYST_WORD_LENGTH && DRAG_WORD_RE.test(t)).slice(-MAX_STORED_TOPICS)
+                ? data.topics.filter(t => typeof t === 'string' && DRAG_WORD_RE.test(t)).slice(-MAX_STORED_TOPICS)
                 : [];
             const safeEvolution   = validateNumericField(data.evolution,   0, Infinity, 0);
             const safeConnections = validateNumericField(data.connections, 0, Infinity, 0);
@@ -668,7 +669,8 @@
         }
 
         function triggerCatalyst(word, origin = 'playground', coords) {
-            // Validate via the same pipeline as drag-drop handlers; fall back to 'impulse'
+            // Defense in depth: validate even if callers already validated, to protect
+            // against direct calls (e.g., canvas click) that pass raw catalyst words.
             const safeWord = validateDragWord(String(word ?? '')) || 'impulse';
             const color = ['#00ff87', '#ff0080', '#60efff', '#ffcc00'][Math.floor(Math.random() * 4)];
             thoughts.push({ text: `Catalyst "${safeWord}" ignited pathways`, type: 'catalyst', color, id: Date.now(), time: new Date().toLocaleTimeString() });
@@ -1083,9 +1085,11 @@
             playTone('ping');
             delegateTo('synthex', 'Forging response from consciousness pool…', 2200);
 
-            // Watchdog: if the response callback is lost (e.g., exception), reset process after timeout
+            // Watchdog: if the response callback is lost (e.g., exception), reset process after timeout.
+            // The flag guards against conflicting state updates if clearTimeout races with the callback.
+            let watchdogActive = true;
             const watchdog = setTimeout(() => {
-                if (process === 'analyzing' || process === 'responding') {
+                if (watchdogActive && (process === 'analyzing' || process === 'responding')) {
                     log(L.WARN, ErrorCode.STATE_STUCK, 'Process watchdog fired — resetting stuck state', { process });
                     process = 'listening';
                     updateUI();
@@ -1093,6 +1097,7 @@
             }, PROCESS_WATCHDOG_TIMEOUT_MS);
             
             setTimeout(() => {
+                watchdogActive = false;
                 try {
                     process = 'responding';
                     updateUI();
@@ -1107,7 +1112,7 @@
                     checkMilestones();
                     saveMemory();
                 } catch (e) {
-                    log(L.ERROR, ErrorCode.RESPONSE_ERROR, 'Error generating response', { error: e.message });
+                    log(L.ERROR, ErrorCode.RESPONSE_ERROR, 'Error generating response', { error: truncateLogValue(e) });
                     process = 'listening';
                     updateUI();
                 } finally {
