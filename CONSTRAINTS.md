@@ -38,7 +38,7 @@ All state mutations flow through the shared `State` object.
 | `CatalystModule` | Catalyst triggers, drag-and-drop, pool rendering | KATALYST |
 | `MilestoneModule` | Evolution threshold checks and milestone UI | EVØLVER |
 | `PersonalityModule` | Persona switching, accent CSS variable, silent-mode init | — |
-| `UIModule` | All DOM read/write operations; chat markup rendering | SYNTHEX |
+| `UIModule` | Chat markup rendering + shared HUD/UI updates | SYNTHEX |
 | `VoiceModule` | `SpeechRecognition` lifecycle; graceful no-op when unavailable | V0X |
 | `REE` | Response Execution Engine — input classification + response synthesis | SYNTHEX |
 | `GodModeEngine` | ESOF v2 orchestrator; boot sequence, event wiring, thought loop | all |
