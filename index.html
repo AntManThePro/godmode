@@ -473,10 +473,10 @@
                 try {
                     const data = JSON.parse(saved);
                     State.memory        = { ...State.memory, ...data };
-                    State.awareness     = data.awareness    || State.awareness;
-                    State.connections   = data.connections  || State.connections;
-                    State.evolution     = data.evolution    || State.evolution;
-                    State.personality   = data.personality  || State.personality;
+                    State.awareness     = data.awareness    ?? State.awareness;
+                    State.connections   = data.connections  ?? State.connections;
+                    State.evolution     = data.evolution    ?? State.evolution;
+                    State.personality   = data.personality  ?? State.personality;
                     State.memory.chats  = data.chats        || [];
                     State.topicSet      = new Set(data.topics || []);
                     State.memory.topics = Array.from(State.topicSet);
