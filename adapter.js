@@ -219,19 +219,26 @@ const GodModeAdapter = (() => {
      * @param {number} [config.timeoutMs] - request timeout ms; default 10 000
      */
     function configure(config) {
+        function failConfiguration(detail) {
+            _config = null;
+            _state  = 'error';
+            _detail = detail;
+            _log('error', detail);
+        }
+
         if (!config || typeof config !== 'object') {
-            _log('error', 'configure: config object is required');
+            failConfiguration('configure: config object is required');
             return;
         }
 
         const endpoint = _normaliseEndpoint(config.endpoint);
         if (!endpoint) {
-            _log('error', 'configure: endpoint must be a valid http(s) URL');
+            failConfiguration('configure: endpoint must be a valid http(s) URL');
             return;
         }
 
         if (typeof config.apiKey !== 'string' || !config.apiKey.trim()) {
-            _log('error', 'configure: apiKey is required and must be a non-empty string');
+            failConfiguration('configure: apiKey is required and must be a non-empty string');
             return;
         }
 
