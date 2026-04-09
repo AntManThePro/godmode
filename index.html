@@ -1112,7 +1112,9 @@
                     checkMilestones();
                     saveMemory();
                 } catch (e) {
-                    log(L.ERROR, ErrorCode.RESPONSE_ERROR, 'Error generating response', { error: truncateLogValue(e) });
+                    log(L.ERROR, ErrorCode.RESPONSE_ERROR, 'Error generating response', {
+                        error: truncateLogValue(e && typeof e.message === 'string' ? e.message : String(e))
+                    });
                     process = 'listening';
                     updateUI();
                 } finally {
