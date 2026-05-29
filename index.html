@@ -971,11 +971,11 @@
                 </div>`;
             },
 
-            addToChat(input, response, time = new Date().toLocaleTimeString(), restoring = false, fromVoice = false) {
+            addToChat(input, response, time = new Date().toLocaleTimeString(), suppressSave = false, fromVoice = false) {
                 const chat = document.getElementById('chatHistory');
                 chat.innerHTML = this._chatMarkup(input, response, time, State.personality, State.emotion, fromVoice) + chat.innerHTML;
                 State.memory.chats.push({ input, response, time, personality: State.personality, emotion: State.emotion, fromVoice });
-                if (!restoring) MemoryModule.save();
+                if (!suppressSave) MemoryModule.save();
             },
 
             renderChatFromMemory() {

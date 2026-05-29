@@ -67,7 +67,7 @@ Modules must not cache copies of `State` fields that can drift.
 
 | Risk | Status | Notes |
 |---|---|---|
-| `innerHTML` injection via chat | Known; accepted | User controls their own input; no server-side rendering; single-user local deployment. Chat input and response text are not sanitized before insertion into DOM. |
+| `innerHTML` injection via chat | Mitigated | Chat input and response text are HTML-escaped via `UIModule._escape()` before insertion into the DOM via `innerHTML`. |
 | `innerHTML` injection via static arrays | Low risk; documented | `DATA.catalystWords`, `DATA.darkSecretTriggers`, and `AgentModule._agents` names/roles are also rendered via `innerHTML`. These are currently code-defined constants. If ever made user-configurable or loaded from external sources, they must be sanitized before rendering. |
 | `innerHTML` injection via drag-and-drop text/plain` | Known; accepted | Drag-and-drop can supply arbitrary `text/plain` data from the browser, not just code-defined catalyst words. If dropped text is echoed into the thought stream, chat, or other DOM regions via `innerHTML`, it is user-controlled content and carries the same self-XSS risk as chat input. Constrain dropped values to an approved set or render via `textContent` / trusted sanitization if this behavior changes. |
 | `localStorage` scope | Domain-scoped | Data is readable by any script on the same origin; no sensitive data stored |
@@ -75,7 +75,7 @@ Modules must not cache copies of `State` fields that can drift.
 | Authentication | None by design | Single-user, personal-deployment application |
 | Content Security Policy | Not enforced | CDN-loaded Tailwind and inline `<script>` preclude a strict CSP without restructuring |
 
-> **Note on self-XSS:** Chat input, response text, dropped drag-and-drop `text/plain` values, catalyst words, agent names/roles, and topic chips are all echoed into the DOM via `innerHTML` without HTML escaping. This is accepted for this deployment model (personal, local, no server). Dropped text must not be assumed to come only from code-defined arrays. If the app is ever multi-user, served from a shared origin, or if any of these data sources become user-configurable or externally loaded, all values must be sanitized (e.g., via `textContent` assignment or a trusted HTML sanitizer) before insertion.
+> **Note on self-XSS:** Chat input and response text are now HTML-escaped via `UIModule._escape()` before insertion. Catalyst words, agent names/roles, and milestone titles are code-defined constants rendered via `innerHTML`; if ever made user-configurable or externally loaded, they must be sanitized. Drag-and-drop `text/plain` values and thought-stream text are rendered via `textContent`. Topic chips are built with `textContent`. If the app is ever multi-user or served from a shared origin, all remaining dynamic values inserted via `innerHTML` must be reviewed for sanitization.
 
 ---
 
