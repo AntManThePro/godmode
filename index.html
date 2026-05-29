@@ -1023,6 +1023,7 @@
 
                 this._recognition.onresult = event => {
                     const result = event.results[event.resultIndex];
+                    if (!result || !result[0]) return;
                     const transcript = result[0].transcript;
                     if (result.isFinal) {
                         document.getElementById('userInput').value = transcript;
