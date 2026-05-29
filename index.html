@@ -897,14 +897,30 @@
                 document.getElementById('thoughtCount').textContent = State.thoughts.length;
                 document.getElementById('miniProcess').textContent  = State.process;
                 const stream = document.getElementById('thoughtStream');
-                stream.innerHTML = State.thoughts.slice(-10).reverse().map(t => `
-                    <div class="p-3 bg-black bg-opacity-30 rounded border-l-4 transform transition hover:translate-x-2" style="border-color:${t.color};box-shadow:0 0 15px ${t.color}40">
-                        <div class="flex justify-between text-xs mb-1">
-                            <span style="color:${t.color}" class="font-bold uppercase">${t.type}</span>
-                            <span class="opacity-75">${t.time}</span>
-                        </div>
-                        <div>${t.text}</div>
-                    </div>`).join('');
+                const fragment = document.createDocumentFragment();
+                State.thoughts.slice(-10).reverse().forEach(t => {
+                    const card = document.createElement('div');
+                    card.className = 'p-3 bg-black bg-opacity-30 rounded border-l-4 transform transition hover:translate-x-2';
+                    card.style.borderColor = t.color;
+                    card.style.boxShadow = `0 0 15px ${t.color}40`;
+                    const header = document.createElement('div');
+                    header.className = 'flex justify-between text-xs mb-1';
+                    const typeSpan = document.createElement('span');
+                    typeSpan.style.color = t.color;
+                    typeSpan.className = 'font-bold uppercase';
+                    typeSpan.textContent = t.type;
+                    const timeSpan = document.createElement('span');
+                    timeSpan.className = 'opacity-75';
+                    timeSpan.textContent = t.time;
+                    header.appendChild(typeSpan);
+                    header.appendChild(timeSpan);
+                    const textDiv = document.createElement('div');
+                    textDiv.textContent = t.text;
+                    card.appendChild(header);
+                    card.appendChild(textDiv);
+                    fragment.appendChild(card);
+                });
+                stream.replaceChildren(fragment);
                 MilestoneModule.render();
                 this.renderTopics();
                 AgentModule.render();
@@ -932,19 +948,25 @@
                 });
             },
 
+            _escape(str) {
+                return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+            },
+
             _chatMarkup(input, response, time, personality, emotion, fromVoice = false) {
-                const inputLabel = fromVoice ? 'YOU SAID:' : 'YOU ASKED:';
+                const inputLabel   = fromVoice ? 'YOU SAID:' : 'YOU ASKED:';
+                const safeInput    = this._escape(input);
+                const safeResponse = this._escape(response);
                 return `<div class="space-y-2">
                     <div class="bg-cyan-500 bg-opacity-20 p-3 rounded border border-cyan-400 transform transition hover:translate-x-1">
                         <div class="text-xs text-cyan-300 mb-1">${inputLabel}</div>
-                        <div>${input}</div>
+                        <div>${safeInput}</div>
                     </div>
                     <div class="bg-green-500 bg-opacity-20 p-3 rounded border border-green-400 transform transition hover:translate-x-1">
                         <div class="text-xs text-green-300 mb-1 flex justify-between">
                             <span>GODMODE (${personality} · feeling: ${emotion}):</span>
                             <span>${time}</span>
                         </div>
-                        <div>${response}</div>
+                        <div>${safeResponse}</div>
                     </div>
                 </div>`;
             },
@@ -974,6 +996,14 @@
             _isListening: false,
 
             init() {
+                document.getElementById('micBtn').onclick = () => {
+                    if (!this._recognition) {
+                        document.getElementById('voiceStatus').textContent = '❌ Speech recognition not supported';
+                        return;
+                    }
+                    this._isListening ? this._recognition.stop() : this._recognition.start();
+                };
+
                 if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) return;
                 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
                 this._recognition = new SR();
@@ -983,16 +1013,18 @@
 
                 this._recognition.onstart = () => {
                     this._isListening = true;
+                    State.process = 'voice-listening';
                     document.body.classList.add('listening');
                     document.getElementById('voiceStatus').textContent = '🎤 Listening... speak now';
-                    document.getElementById('miniProcess').textContent = 'listening';
+                    UIModule.update();
                     AgentModule.delegateTo('vox', 'Listening for voice input…', 5000);
                     ParticleModule.create();
                 };
 
                 this._recognition.onresult = event => {
-                    const transcript = Array.from(event.results).map(r => r[0].transcript).join('');
-                    if (event.results[0].isFinal) {
+                    const result = event.results[event.resultIndex];
+                    const transcript = result[0].transcript;
+                    if (result.isFinal) {
                         document.getElementById('userInput').value = transcript;
                         document.getElementById('voiceStatus').textContent = `✅ Got it: "${transcript}"`;
                         GodModeEngine.handleSend(true);
@@ -1003,24 +1035,19 @@
 
                 this._recognition.onerror = event => {
                     this._isListening = false;
+                    State.process = 'listening';
                     document.body.classList.remove('listening');
                     document.getElementById('voiceStatus').textContent = `❌ ${event.error}`;
+                    UIModule.update();
                     setTimeout(() => { document.getElementById('voiceStatus').textContent = ''; }, 3000);
                 };
 
                 this._recognition.onend = () => {
                     this._isListening = false;
+                    if (State.process === 'voice-listening') State.process = 'listening';
                     document.body.classList.remove('listening');
                     const vs = document.getElementById('voiceStatus');
                     if (vs && !vs.textContent.includes('Got it')) vs.textContent = '';
-                };
-
-                document.getElementById('micBtn').onclick = () => {
-                    if (!this._recognition) {
-                        document.getElementById('voiceStatus').textContent = '❌ Speech recognition not supported';
-                        return;
-                    }
-                    this._isListening ? this._recognition.stop() : this._recognition.start();
                 };
             },
         };
@@ -1173,9 +1200,9 @@
             },
 
             _bindEvents() {
-                document.getElementById('sendBtn').onclick       = () => this.handleSend();
-                document.getElementById('userInput').onkeypress = e => { if (e.key === 'Enter') this.handleSend(); };
-                document.getElementById('resetMemory').onclick   = () => MemoryModule.reset();
+                document.getElementById('sendBtn').onclick     = () => this.handleSend();
+                document.getElementById('userInput').addEventListener('keydown', e => { if (e.key === 'Enter') this.handleSend(); });
+                document.getElementById('resetMemory').onclick = () => MemoryModule.reset();
             },
 
             handleSend(fromVoice = false) {
@@ -1188,7 +1215,6 @@
                 UIModule.update();
                 ParticleModule.create();
                 MemoryModule.rememberTopic(input);
-                MemoryModule.save();
                 AudioModule.prime();
                 AudioModule.playTone('ping');
                 AgentModule.delegateTo('synthex', 'Forging response from consciousness pool…', 2200);
@@ -1196,7 +1222,7 @@
                     State.process = 'responding';
                     UIModule.update();
                     const response = REE.execute(input);
-                    UIModule.addToChat(input, response, new Date().toLocaleTimeString(), false, fromVoice);
+                    UIModule.addToChat(input, response, new Date().toLocaleTimeString(), true, fromVoice);
                     document.getElementById('userInput').value = '';
                     document.getElementById('voiceStatus').textContent = '';
                     State.process = 'listening';
