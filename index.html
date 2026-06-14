@@ -398,6 +398,7 @@
             ],
             _map: {},
             _seq: 0,
+            _timeouts: {},
 
             init() {
                 this._agents.forEach(a => { this._map[a.id] = a; });
@@ -406,6 +407,7 @@
             delegateTo(agentId, task, duration = CONFIG.DEFAULT_AGENT_TASK_DURATION) {
                 const agent = this._map[agentId];
                 if (!agent) return;
+                if (this._timeouts[agentId]) clearTimeout(this._timeouts[agentId]);
                 agent.status = 'active';
                 this.render();
                 State.thoughts.push({
@@ -415,7 +417,13 @@
                     id:    Date.now() * 1000 + (++this._seq % 1000),
                     time:  new Date().toLocaleTimeString(),
                 });
-                setTimeout(() => { agent.status = 'idle'; this.render(); }, duration);
+                const timeoutId = setTimeout(() => {
+                    if (this._timeouts[agentId] !== timeoutId) return;
+                    agent.status = 'idle';
+                    delete this._timeouts[agentId];
+                    this.render();
+                }, duration);
+                this._timeouts[agentId] = timeoutId;
             },
 
             render() {
@@ -528,7 +536,7 @@
                 State.thoughts           = [];
                 const el = document.getElementById('memoryStatus');
                 if (el) el.textContent = 'Fresh (reset)';
-                document.getElementById('chatHistory').innerHTML = '';
+                UIModule.clearChat();
                 UIModule.renderTopics();
                 MilestoneModule.render();
                 UIModule.update();
@@ -868,8 +876,8 @@
                     AudioModule.prime();
                     AudioModule.playTone('ping');
                     ParticleModule.create();
+                    MemoryModule.save();
                 }
-                MemoryModule.save();
             },
 
             init() {
@@ -975,6 +983,22 @@
                 chat.innerHTML = this._chatMarkup(input, response, time, State.personality, State.emotion, fromVoice) + chat.innerHTML;
                 State.memory.chats.push({ input, response, time, personality: State.personality, emotion: State.emotion, fromVoice });
                 if (!suppressSave) MemoryModule.save();
+            },
+
+            clearChat() {
+                const chat = document.getElementById('chatHistory');
+                if (chat) chat.innerHTML = '';
+            },
+
+            prependSystemBanner(title, message, borderClass = 'border-cyan-400', titleClass = 'text-cyan-300') {
+                const chat = document.getElementById('chatHistory');
+                if (!chat) return;
+                const safeTitle = this._escape(title);
+                const safeMessage = this._escape(message);
+                chat.innerHTML = `<div class="bg-black bg-opacity-60 p-3 rounded border ${borderClass} animate-pulse-slow">
+                    <div class="text-xs ${titleClass} mb-1">${safeTitle}</div>
+                    <div>${safeMessage}</div>
+                </div>` + chat.innerHTML;
             },
 
             renderChatFromMemory() {
@@ -1129,11 +1153,12 @@
             },
 
             _announceSecret(word) {
-                const chat = document.getElementById('chatHistory');
-                chat.innerHTML = `<div class="bg-black bg-opacity-60 p-3 rounded border border-pink-500 animate-pulse-slow">
-                    <div class="text-xs text-pink-300 mb-1">DARK SECRET MODE</div>
-                    <div>Hidden archive recognized: "${word}". Response channel encrypted.</div>
-                </div>` + chat.innerHTML;
+                UIModule.prependSystemBanner(
+                    'DARK SECRET MODE',
+                    `Hidden archive recognized: "${word}". Response channel encrypted.`,
+                    'border-pink-500',
+                    'text-pink-300'
+                );
                 AgentModule.delegateTo('darkwire', `Decrypting archive entry for "${word}"…`, 2500);
                 AudioModule.playTone('secret');
             },
