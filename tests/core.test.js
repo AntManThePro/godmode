@@ -222,6 +222,16 @@ describe('extractTopics', () => {
         assert.ok(result.size <= 3);
     });
 
+    test('applies maxPerMessage to newly-added topics when existing topics and duplicates appear', () => {
+        const existing = new Set(['alpha']);
+        const result = extractTopics('alpha alpha beta beta gamma delta', existing);
+
+        assert.ok(result.has('alpha'));
+        assert.ok(result.has('beta'));
+        assert.ok(result.has('gamma'));
+        assert.ok(result.has('delta'));
+        assert.equal(result.size, 4);
+    });
     test('does not mutate existingTopics', () => {
         const existing = new Set(['memory']);
         extractTopics('quantum consciousness', existing);
