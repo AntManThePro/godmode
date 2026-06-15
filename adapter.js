@@ -142,10 +142,8 @@ const GodModeAdapter = (() => {
         if (typeof raw !== 'string') return null;
         const trimmed = raw.trim().replace(/\/+$/, '');
         try {
-            const url = new URL(trimmed);
             const isLocalHttpHost =
-                url.hostname === 'localhost' || url.hostname === '127.0.0.1';
-
+                url.hostname === 'localhost' || url.hostname === '127.0.0.1' || url.hostname === '::1';
             if (url.username || url.password) return null;
             if (url.search || url.hash) return null;
             if (url.protocol === 'https:') return trimmed;
