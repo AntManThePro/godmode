@@ -90,7 +90,8 @@
  *     lifetime of the browser session. They are never written to localStorage,
  *     sessionStorage, cookies, or any log output.
  *   • The endpoint URL is validated to require https (or http for localhost
- *     development).
+ *     development). Redirect handling follows the configured/browser fetch
+ *     behavior unless explicitly overridden in the request options.
  *   • Input sent to the API consists only of the user's explicit message and
  *     GodMode's numeric/string state values — no raw DOM or environment data.
  */
