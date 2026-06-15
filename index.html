@@ -440,6 +440,18 @@
             };
         }
 
+        // Escape HTML special characters to prevent XSS when inserting user content into DOM
+        function escapeHtml(text) {
+            const map = {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#039;'
+            };
+            return String(text).replace(/[&<>"']/g, (char) => map[char]);
+        }
+
         function ensureAudio() {
             if (!audioPrimed) return null;
             if (!audioCtx && (window.AudioContext || window.webkitAudioContext)) {
@@ -1161,14 +1173,14 @@
                 <div class="space-y-2">
                     <div class="bg-cyan-500 bg-opacity-20 p-3 rounded border border-cyan-400 transform transition hover:translate-x-1">
                         <div class="text-xs text-cyan-300 mb-1">YOU ${isListening ? 'SAID' : 'ASKED'}:</div>
-                        <div>${input}</div>
+                        <div>${escapeHtml(input)}</div>
                     </div>
                     <div class="bg-green-500 bg-opacity-20 p-3 rounded border border-green-400 transform transition hover:translate-x-1">
                         <div class="text-xs text-green-300 mb-1 flex justify-between">
-                            <span>GODMODE (${personaLabel} · feeling: ${feelingLabel}):</span>
-                            <span>${time}</span>
+                            <span>GODMODE (${escapeHtml(personaLabel)} · feeling: ${escapeHtml(feelingLabel)}):</span>
+                            <span>${escapeHtml(time)}</span>
                         </div>
-                        <div>${response}</div>
+                        <div>${escapeHtml(response)}</div>
                     </div>
                 </div>
             `;

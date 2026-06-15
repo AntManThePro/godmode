@@ -58,7 +58,7 @@
  *     GodMode's live internal state.
  *
  *   user input → user message
- *     Passed verbatim as the `user` role message; no transformation applied.
+ *     Passed as the `user` role message after trimming leading and trailing whitespace. No escaping, filtering, or wrapping is applied beyond that trimming step.
  *
  *   response.choices[0].message.content → return value
  *     Trimmed to a plain string. Empty or missing content → null (fallback).
@@ -290,6 +290,8 @@ const GodModeAdapter = (() => {
             return null;
         }
 
+        context = context || {};
+
         const url  = `${_config.endpoint}${CHAT_PATH}`;
         const body = JSON.stringify({
             model    : _config.model,
@@ -317,10 +319,11 @@ const GodModeAdapter = (() => {
             });
         } catch (err) {
             clearTimeout(timeoutId);
-            if (err.name === 'AbortError') {
+            if (err?.name === 'AbortError') {
                 _log('warn', `Request timed out after ${_config.timeoutMs} ms — falling back to local generation`);
             } else {
-                _log('warn', 'Network error during adapter query — falling back to local generation', err.message);
+                const errMsg = err?.message ?? String(err);
+                _log('warn', 'Network error during adapter query — falling back to local generation', errMsg);
             }
             return null;
         }
