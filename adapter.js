@@ -290,7 +290,7 @@ const GodModeAdapter = (() => {
             return null;
         }
 
-        context = context || {};
+        context = context ?? {};
 
         const url  = `${_config.endpoint}${CHAT_PATH}`;
         const body = JSON.stringify({
