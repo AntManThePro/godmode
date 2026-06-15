@@ -179,11 +179,12 @@ function evaluateMilestones(
  *   - emotion is selected from EMOTIONS using the provided randFn.
  *
  * @param {{ awareness: number, connections: number, evolution: number, emotion: string }} state
- * @param {string} [word]
+ * @param {string} [word]           - Accepted for API compatibility; does not affect the state transition.
  * @param {() => number} [randFn]   - Seeded random source for testing (default Math.random)
  * @returns {{ awareness: number, connections: number, evolution: number, emotion: string }}
  */
 function applyCatalyst(state, word = 'impulse', randFn = Math.random) {
+    void word;
     const nextEmotion = EMOTIONS[Math.floor(randFn() * EMOTIONS.length)];
     return {
         ...state,
