@@ -164,7 +164,7 @@ Passed as the `user` role message after trimming leading and trailing whitespace
 | Empty input | No change | `null` | |
 | Network error | No change (`ready`) | `null` | Transient |
 | Request timeout (>10 s) | No change (`ready`) | `null` | Request aborted via AbortController |
-| Body read timeout (>10 s) | No change (`ready`) | `null` | Response headers received but body not fully consumed; abort signal propagates to body stream |
+| Body read timeout (>10 s) | No change (`ready`) | `null` | The timeout applies to both the network request and reading the response body |
 | HTTP 401 / 403 | `'ready'` → `'error'` | `null` | Adapter disabled until re-configured |
 | HTTP 429 | No change (`ready`) | `null` | Rate-limited; next call may succeed |
 | HTTP 5xx | No change (`ready`) | `null` | Transient server error |
