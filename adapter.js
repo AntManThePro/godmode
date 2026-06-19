@@ -369,8 +369,12 @@ const GodModeAdapter = (() => {
             try {
                 data = await response.json();
             } catch (err) {
-                _log('warn', 'Failed to parse API response as JSON — falling back to local generation',
-                    err?.message ?? String(err));
+                if (err?.name === 'AbortError') {
+                    _log('warn', `Body read timed out after ${_config.timeoutMs} ms — falling back to local generation`);
+                } else {
+                    _log('warn', 'Failed to parse API response as JSON — falling back to local generation',
+                        err?.message ?? String(err));
+                }
                 return null;
             }
 
