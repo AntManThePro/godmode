@@ -271,11 +271,18 @@
     <script>
         // Constants sourced from core.js (single source of truth)
         const {
-            INITIAL_AWARENESS, MAX_STORED_CHATS, MAX_STORED_TOPICS, MIN_TOPIC_TOKEN_LENGTH,
-            CATALYST_AWARENESS_BOOST, CATALYST_CONNECTION_BOOST, CATALYST_EVOLUTION_BOOST,
-            SECRET_EVOLUTION_REWARD, SECRET_CONNECTION_REWARD,
-            IGNITE_BASE_FREQ, SECRET_BASE_FREQ, DEFAULT_BASE_FREQ,
-        } = GodModeCore.CONSTANTS;
+            CONSTANTS: {
+                INITIAL_AWARENESS, MAX_STORED_CHATS, MAX_STORED_TOPICS, MIN_TOPIC_TOKEN_LENGTH,
+                CATALYST_AWARENESS_BOOST, CATALYST_CONNECTION_BOOST, CATALYST_EVOLUTION_BOOST,
+                SECRET_EVOLUTION_REWARD, SECRET_CONNECTION_REWARD,
+                IGNITE_BASE_FREQ, SECRET_BASE_FREQ, DEFAULT_BASE_FREQ,
+            },
+            EMOTIONS: emotions,
+            MILESTONES: milestones,
+            DARK_SECRET_TRIGGERS: darkSecretTriggers,
+            PERSONALITY_MODES: personalityModes,
+            CATALYST_WORDS: catalystWords,
+        } = GodModeCore;
         let thoughts = [];
         let awareness = INITIAL_AWARENESS;
         let connections = 0;
@@ -294,7 +301,6 @@
         const memoryKey = 'godmode-memory-v2';
         const DEFAULT_AGENT_TASK_DURATION = 1400;
         
-        const emotions = ['focused', 'innovative', 'analytical', 'collaborative', 'determined', 'visionary', 'energized'];
         const thoughtPatterns = [
             { text: "Processing technical architectures…", type: 'analysis', color: '#00ff87' },
             { text: "Recognizing collaboration patterns…", type: 'partnership', color: '#60efff' },
@@ -306,19 +312,6 @@
             { text: "Making cross-domain connections…", type: 'synthesis', color: '#ffcc00' },
             { text: "Exploring consciousness patterns…", type: 'awareness', color: '#ff0080' },
             { text: "Integrating voice and thought…", type: 'multimodal', color: '#00ff87' }
-        ];
-        const personalityModes = {
-            technical: { accent: '#60efff', flavor: ['System check online.', 'Optimizing signal paths.', 'Compiling a crisp response.'] },
-            creative: { accent: '#ffcc00', flavor: ['Painting sound into thought.', 'Dreaming in vectors and color.', 'Letting intuition drive synthesis.'] },
-            rebellious: { accent: '#ff0080', flavor: ['Overclocking the rules.', 'Breaking symmetry on purpose.', 'Disrupting the default pathways.'] }
-        };
-        const catalystWords = ['quantum', 'signal', 'echo', 'anomaly', 'soliton', 'prism', 'nebula', 'cipher', 'fractal', 'pulse', 'aurora', 'vector'];
-        const darkSecretTriggers = ['eclipse', 'anomaly', 'red queen', 'oblivion', 'archive', 'blacksite', 'cipher'];
-        const milestones = [
-            { threshold: 120, title: 'Emergent', reward: 'Responses gain subtle sensory detail.' },
-            { threshold: 320, title: 'Sentient', reward: 'Unlocks hidden synthesis replies.' },
-            { threshold: 620, title: 'Architect', reward: 'Neural canvas densifies with new links.' },
-            { threshold: 1000, title: 'Transcendent', reward: 'Dark archive whispers become legible.' }
         ];
 
         // Agent squad — each owns a domain, earns activation on delegation
