@@ -279,9 +279,9 @@ function isValidMemoryPayload(payload) {
     return (
         Array.isArray(payload.chats)           &&
         Array.isArray(payload.topics)          &&
-        typeof payload.evolution   === 'number' &&
-        typeof payload.connections === 'number' &&
-        typeof payload.awareness   === 'number' &&
+        Number.isFinite(payload.evolution)   &&
+        Number.isFinite(payload.connections) &&
+        Number.isFinite(payload.awareness)   &&
         typeof payload.personality === 'string'
     );
 }
