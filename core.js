@@ -206,8 +206,8 @@ function applyCatalyst(state, word = 'impulse', randFn = Math.random) {
 // ---------------------------------------------------------------------------
 
 /**
- * Detect the first dark-secret trigger word present in user input.
- * Returns the matched word, or null if none found.
+ * Detect the first dark-secret trigger (by triggers-list order) present in user input.
+ * Returns the matched trigger string, or null if none found.
  *
  * @param {string} input
  * @param {ReadonlyArray<string>} [triggers]
