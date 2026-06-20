@@ -429,10 +429,7 @@ const GodModeAdapter = (() => {
      * adapter rather than to change its settings.
      */
     function reset() {
-        _config = null;
-        _state = 'unconfigured';
-        _detail = '';
-        _log('info', 'Adapter configuration cleared');
+        configure(null);
     }
 
     // Expose the public API as a frozen object so callers cannot mutate it
