@@ -497,6 +497,20 @@ describe('serializeMemory', () => {
         assert.equal(result.awareness,   CONSTANTS.INITIAL_AWARENESS);
     });
 
+    test('coerces non-array chats/topics to empty arrays', () => {
+        const result = serializeMemory({
+            chats: 'not-an-array',
+            topics: { topic: 'quantum' },
+            evolution: 1,
+            connections: 2,
+            awareness: 3,
+            personality: 'technical',
+        });
+
+        assert.deepEqual(result.chats, []);
+        assert.deepEqual(result.topics, []);
+    });
+
     test('round-trips through JSON without loss', () => {
         const result  = serializeMemory(fullState);
         const parsed  = JSON.parse(JSON.stringify(result));
@@ -547,6 +561,12 @@ describe('isValidMemoryPayload', () => {
 
     test('rejects when awareness is not a number', () => {
         assert.equal(isValidMemoryPayload({ ...valid, awareness: true }), false);
+    });
+
+    test('rejects non-finite numeric fields', () => {
+        assert.equal(isValidMemoryPayload({ ...valid, evolution: NaN }), false);
+        assert.equal(isValidMemoryPayload({ ...valid, connections: Infinity }), false);
+        assert.equal(isValidMemoryPayload({ ...valid, awareness: -Infinity }), false);
     });
 
     test('rejects when personality is not a string', () => {

@@ -269,6 +269,10 @@
 
     <script src="core.js"></script>
     <script>
+        if (!window.GodModeCore) {
+            throw new Error('GodModeCore failed to load. Ensure core.js is available before booting the UI.');
+        }
+
         // Simulation constants sourced from core.js (shared source of truth for tunable numeric constants)
         const {
             CONSTANTS: {
@@ -282,7 +286,7 @@
             DARK_SECRET_TRIGGERS: darkSecretTriggers,
             PERSONALITY_MODES: personalityModes,
             CATALYST_WORDS: catalystWords,
-        } = GodModeCore;
+        } = window.GodModeCore;
         let thoughts = [];
         let awareness = INITIAL_AWARENESS;
         let connections = 0;
