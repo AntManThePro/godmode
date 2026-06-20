@@ -186,7 +186,12 @@ function evaluateMilestones(
  */
 function applyCatalyst(state, word = 'impulse', randFn = Math.random) {
     void word;
-    const nextEmotion = EMOTIONS[Math.floor(randFn() * EMOTIONS.length)];
+    const r = randFn();
+    const idx = Math.min(
+        EMOTIONS.length - 1,
+        Math.max(0, Math.floor((Number.isFinite(r) ? r : 0) * EMOTIONS.length)),
+    );
+    const nextEmotion = EMOTIONS[idx];
     return {
         ...state,
         awareness:   clampAwareness(state.awareness + CONSTANTS.CATALYST_AWARENESS_BOOST),
