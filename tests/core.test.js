@@ -2,7 +2,7 @@
  * tests/core.test.js
  *
  * End-to-end reference tests for the GodMode Consciousness Engine core.
- * Run with: node --test tests/*.test.js
+ * Run with: npm test
  *
  * Uses only Node.js built-in test infrastructure (no third-party deps).
  * Every test exercises a real behavioral contract — not mocks, not stubs.
