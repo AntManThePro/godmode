@@ -2,7 +2,7 @@
  * tests/core.test.js
  *
  * End-to-end reference tests for the GodMode Consciousness Engine core.
- * Run with: node --test tests/
+ * Run with: node --test tests/*.test.js
  *
  * Uses only Node.js built-in test infrastructure (no third-party deps).
  * Every test exercises a real behavioral contract — not mocks, not stubs.
@@ -341,6 +341,11 @@ describe('applyCatalyst', () => {
             const next = applyCatalyst(baseState, 'quantum', () => seed);
             assert.ok(EMOTIONS.includes(next.emotion), `unexpected emotion: ${next.emotion}`);
         });
+    });
+
+    test('clamps injected random values to a valid emotion index', () => {
+        const next = applyCatalyst(baseState, 'quantum', () => 1);
+        assert.equal(next.emotion, EMOTIONS[EMOTIONS.length - 1]);
     });
 
     test('does not mutate input state', () => {
