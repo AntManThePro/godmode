@@ -349,6 +349,7 @@
         // Only accepts valid CSS hex lengths: 3, 4, 6, or 8 hex digits.
         // @param {string} color  Candidate color value.
         // @returns {string} Normalized 6-digit hex color; '#00ff87' (safe default) if invalid.
+        function safeCSSColor(color) {
             const m = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.exec(String(color));
             if (!m) return '#00ff87';
             let hex = m[1];
