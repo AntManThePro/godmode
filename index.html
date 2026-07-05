@@ -349,6 +349,7 @@
         // Only accepts valid CSS hex lengths: 3, 4, 6, or 8 hex digits.
         // @param {string} color  Candidate color value.
         // @returns {string} Normalized 6-digit hex color; '#00ff87' (safe default) if invalid.
+        function safeCSSColor(color) {
             const m = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.exec(String(color));
             if (!m) return '#00ff87';
             let hex = m[1];
@@ -967,11 +968,11 @@
             
             const stream = document.getElementById('thoughtStream');
             stream.innerHTML = thoughts.slice(-10).reverse().map(t => {
-                const color = safeCSSColor(t.color);
+                const safeColor = safeCSSColor(t.color);
                 return `
-                <div class="p-3 bg-black bg-opacity-30 rounded border-l-4 transform transition hover:translate-x-2" style="border-color: ${color}; box-shadow: 0 0 15px ${color}40">
+                <div class="p-3 bg-black bg-opacity-30 rounded border-l-4 transform transition hover:translate-x-2" style="border-color: ${safeColor}; box-shadow: 0 0 15px ${safeColor}40">
                     <div class="flex justify-between text-xs mb-1">
-                        <span style="color: ${color}" class="font-bold uppercase">${escapeHTML(t.type)}</span>
+                        <span style="color: ${safeColor}" class="font-bold uppercase">${escapeHTML(t.type)}</span>
                         <span class="opacity-75">${escapeHTML(t.time)}</span>
                     </div>
                     <div>${escapeHTML(t.text)}</div>
