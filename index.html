@@ -8,6 +8,8 @@
     <meta name="apple-mobile-web-app-title" content="GodMode">
     <title>GodMode Consciousness | DoubleA</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- adapter.js is served from the same origin as index.html; SRI is not necessary here. -->
+    <script src="adapter.js"></script>
     <style>
         @keyframes pulse {
             0%, 100% { opacity: 1; transform: scale(1); }
@@ -225,6 +227,53 @@
             <p class="text-xs mt-3 opacity-80">Each agent owns a specialized domain. Watch them light up as you interact — delegation is live.</p>
         </div>
 
+        <!-- External API Adapter -->
+        <div class="bg-white bg-opacity-10 backdrop-blur-lg rounded-xl p-4 border-2 mb-6" style="border-color: #34d399; box-shadow: 0 0 20px rgba(52, 211, 153, 0.15);">
+            <div class="flex items-center justify-between">
+                <h2 class="text-xl font-bold" style="color: #34d399; text-shadow: 0 0 10px rgba(52,211,153,0.5);">🔌 External API Adapter</h2>
+                <div class="flex items-center gap-2">
+                    <div id="adapterStatusDot" class="w-2 h-2 rounded-full" style="background:#6b7280;"></div>
+                    <span id="adapterStatusText" class="text-xs opacity-70">Not configured</span>
+                    <button id="adapterToggleBtn" class="text-xs px-2 py-1 rounded border" style="border-color:#34d399;color:#34d399;">Configure</button>
+                </div>
+            </div>
+            <div id="adapterPanel" class="hidden mt-3">
+                <p class="text-xs opacity-75 mb-3">Connect GodMode to any OpenAI-compatible LLM API. The API key is held in memory only and cleared when the page closes. Endpoint and model are saved locally.</p>
+                <div class="grid md:grid-cols-3 gap-2 mb-3">
+                    <div>
+                        <label class="text-xs opacity-75 block mb-1" for="adapterEndpoint">API Endpoint</label>
+                        <input type="url" id="adapterEndpoint" placeholder="https://api.openai.com"
+                            class="w-full bg-black bg-opacity-50 border rounded px-2 py-1 text-white text-xs"
+                            style="border-color:rgba(52,211,153,0.5);" />
+                    </div>
+                    <div>
+                        <label class="text-xs opacity-75 block mb-1" for="adapterModel">Model</label>
+                        <input type="text" id="adapterModel" placeholder="gpt-4o-mini"
+                            class="w-full bg-black bg-opacity-50 border rounded px-2 py-1 text-white text-xs"
+                            style="border-color:rgba(52,211,153,0.5);" />
+                    </div>
+                    <div>
+                        <label class="text-xs opacity-75 block mb-1" for="adapterKey">API Key <span class="opacity-50">(session only)</span></label>
+                        <input type="password" id="adapterKey" placeholder="sk-…"
+                            class="w-full bg-black bg-opacity-50 border rounded px-2 py-1 text-white text-xs"
+                            style="border-color:rgba(52,211,153,0.5);" autocomplete="off" />
+                    </div>
+                </div>
+                <div class="flex flex-wrap gap-2 items-center">
+                    <button id="adapterConfigBtn"
+                        class="px-3 py-1 rounded text-xs font-bold bg-gradient-to-r from-emerald-600 to-teal-600 hover:opacity-90 transition">Apply</button>
+                    <button id="adapterTestBtn"
+                        class="px-3 py-1 rounded text-xs font-bold border hover:bg-white hover:bg-opacity-10 transition"
+                        style="border-color:#34d399;color:#34d399;">Test Connection</button>
+                    <button id="adapterClearBtn"
+                        class="px-3 py-1 rounded text-xs border hover:bg-white hover:bg-opacity-10 transition"
+                        style="border-color:rgba(255,0,128,0.6);color:rgba(255,0,128,0.8);">Clear</button>
+                    <span id="adapterMessage" class="text-xs opacity-75"></span>
+                </div>
+                <p class="text-xs mt-3 opacity-60">Works with OpenAI, Groq, Together AI, OpenRouter, Ollama, LM Studio, and any OpenAI-compatible endpoint. See <code>ADAPTER.md</code> for details.</p>
+            </div>
+        </div>
+
         <!-- Voice + Text Input -->
         <div class="bg-white bg-opacity-10 backdrop-blur-lg rounded-xl p-4 border-2 border-pink-400 mb-6" style="box-shadow: 0 0 20px rgba(255, 0, 128, 0.2);">
             <h2 class="text-xl font-bold neon-pink mb-3">💬 INTERACT WITH CONSCIOUSNESS</h2>
@@ -268,6 +317,48 @@
     </div>
 
     <script>
+        // Sanitizes a value before injecting into innerHTML to prevent XSS.
+        // All user-controlled strings (chat input, thought text, topics, secret words)
+        // must pass through this before being inserted into the DOM.
+        // @param {*} str  Any value; coerced to string before escaping.
+        // @returns {string} HTML-safe string with &, <, >, ", ' replaced by entities.
+        function escapeHTML(str) {
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        // Pushes a thought entry and enforces a hard cap on the thoughts array.
+        // All push sites use this helper — it is the single enforcement point.
+        // The previous per-site 20-item limit in the setInterval tick has been
+        // removed; MAX_THOUGHTS is now the sole cap across all code paths.
+        // @param {{ text: string, type: string, color: string, id: number, time: string }} entry
+        const MAX_THOUGHTS = 50;
+        function pushThought(entry) {
+            thoughts.push(entry);
+            if (thoughts.length > MAX_THOUGHTS) thoughts.shift();
+        }
+
+        // Validates that a color string is a safe CSS hex color before injecting
+        // into an inline style attribute. Thought/agent/catalyst colors are sourced
+        // from hardcoded arrays, but a crafted localStorage payload could otherwise
+        // smuggle a CSS expression through a stale thoughts reference.
+        // Only accepts valid CSS hex lengths: 3, 4, 6, or 8 hex digits.
+        // @param {string} color  Candidate color value.
+        // @returns {string} The input color if valid; '#00ff87' (safe default) otherwise.
+        function safeCSSColor(color) {
+            const m = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.exec(String(color));
+            if (!m) return '#00ff87';
+            let hex = m[1];
+            if (hex.length === 3) hex = hex.split('').map(c => c + c).join('');
+            else if (hex.length === 4) hex = hex.slice(0, 3).split('').map(c => c + c).join('');
+            else if (hex.length === 8) hex = hex.slice(0, 6);
+            return `#${hex}`;
+        }
+
         // State
         // Tunable simulation constants (visual/audio balance and persistence policy)
         const INITIAL_AWARENESS = 84;
@@ -300,6 +391,7 @@
         let audioPrimed = false;
         const memoryKey = 'godmode-memory-v2';
         const DEFAULT_AGENT_TASK_DURATION = 1400;
+<<<<<<< HEAD
         const MAX_INPUT_LENGTH = 500;
         const MAX_CATALYST_WORD_LENGTH = 64;
         const MAX_LOG_VALUE_LENGTH = 64;
@@ -394,6 +486,13 @@
             return valid;
         }
 
+=======
+        const ADAPTER_CONFIG_KEY = 'godmode-adapter-config';
+        // Minimum pause (ms) before showing a locally-generated response, so the
+        // "analyzing → responding" UX rhythm feels consistent with the API path.
+        const LOCAL_GENERATION_DELAY_MS = 800;
+        
+>>>>>>> origin/main
         const emotions = ['focused', 'innovative', 'analytical', 'collaborative', 'determined', 'visionary', 'energized'];
         const thoughtPatterns = [
             { text: "Processing technical architectures…", type: 'analysis', color: '#00ff87' },
@@ -412,7 +511,12 @@
             creative: { accent: '#ffcc00', flavor: ['Painting sound into thought.', 'Dreaming in vectors and color.', 'Letting intuition drive synthesis.'] },
             rebellious: { accent: '#ff0080', flavor: ['Overclocking the rules.', 'Breaking symmetry on purpose.', 'Disrupting the default pathways.'] }
         };
-        const catalystWords = ['quantum', 'signal', 'echo', 'anomaly', 'soliton', 'prism', 'nebula', 'cipher', 'fractal', 'pulse', 'aurora', 'vector'];
+        // 'anomaly' and 'cipher' were removed from catalystWords because they are already
+        // dark secret triggers (darkSecretTriggers). Having the same word in both arrays
+        // caused ambiguous behavior: dragging the word fired the catalyst path, but typing
+        // it in chat fired the secret path — with no consistent outcome or user signal.
+        // Words with special secret semantics must live exclusively in darkSecretTriggers.
+        const catalystWords = ['quantum', 'signal', 'echo', 'soliton', 'prism', 'nebula', 'fractal', 'pulse', 'aurora', 'vector'];
         const darkSecretTriggers = ['eclipse', 'anomaly', 'red queen', 'oblivion', 'archive', 'blacksite', 'cipher'];
         const milestones = [
             { threshold: 120, title: 'Emergent', reward: 'Responses gain subtle sensory detail.' },
@@ -610,7 +714,11 @@
             const container = document.getElementById('topicChips');
             const topics = Array.from(topicSet);
             container.innerHTML = topics.slice(-10).map(t => `
+<<<<<<< HEAD
                 <span class="px-2 py-1 rounded-full bg-black bg-opacity-40 border border-cyan-400">${sanitizeHTML(t)}</span>
+=======
+                <span class="px-2 py-1 rounded-full bg-black bg-opacity-40 border border-cyan-400">${escapeHTML(t)}</span>
+>>>>>>> origin/main
             `).join('') || '<span class="text-xs opacity-75">No recalled topics yet.</span>';
         }
 
@@ -674,7 +782,11 @@
             // against direct calls (e.g., canvas click) that pass raw catalyst words.
             const safeWord = validateDragWord(String(word ?? '')) || 'impulse';
             const color = ['#00ff87', '#ff0080', '#60efff', '#ffcc00'][Math.floor(Math.random() * 4)];
+<<<<<<< HEAD
             thoughts.push({ text: `Catalyst "${safeWord}" ignited pathways`, type: 'catalyst', color, id: Date.now(), time: new Date().toLocaleTimeString() });
+=======
+            pushThought({ text: `Catalyst "${word}" ignited pathways`, type: 'catalyst', color, id: Date.now(), time: new Date().toLocaleTimeString() });
+>>>>>>> origin/main
             awareness = Math.min(awareness + CATALYST_AWARENESS_BOOST, 100);
             connections += CATALYST_CONNECTION_BOOST;
             evolution += CATALYST_EVOLUTION_BOOST;
@@ -694,7 +806,11 @@
             chat.innerHTML = `
                 <div class="bg-black bg-opacity-60 p-3 rounded border border-pink-500 animate-pulse-slow">
                     <div class="text-xs text-pink-300 mb-1">DARK SECRET MODE</div>
+<<<<<<< HEAD
                     <div>Hidden archive recognized: "${sanitizeHTML(word)}". Response channel encrypted.</div>
+=======
+                    <div>Hidden archive recognized: &ldquo;${escapeHTML(word)}&rdquo;. Response channel encrypted.</div>
+>>>>>>> origin/main
                 </div>
             ` + chat.innerHTML;
             delegateTo('darkwire', `Decrypting archive entry for "${word}"…`, 2500);
@@ -729,7 +845,7 @@
             milestones.forEach(m => {
                 if (evolution >= m.threshold && !unlockedMilestones.has(m.threshold)) {
                     unlockedMilestones.add(m.threshold);
-                    thoughts.push({ text: `Milestone unlocked: ${m.title}`, type: 'milestone', color: '#ffcc00', id: Date.now(), time: new Date().toLocaleTimeString() });
+                    pushThought({ text: `Milestone unlocked: ${m.title}`, type: 'milestone', color: '#ffcc00', id: Date.now(), time: new Date().toLocaleTimeString() });
                     delegateTo('evolver', `Milestone unlocked: ${m.title}`, 2000);
                     playTone('ignite');
                     updateUI();
@@ -746,7 +862,7 @@
             if (!agent) return;
             agent.status = 'active';
             renderAgents();
-            thoughts.push({ text: `[${agent.name}] ${task}`, type: agent.role.toLowerCase().replace(/\s+/g, '-'), color: agent.color, id: Date.now() * 1000 + (++_agentTaskSeq % 1000), time: new Date().toLocaleTimeString() });
+            pushThought({ text: `[${agent.name}] ${task}`, type: agent.role.toLowerCase().replace(/\s+/g, '-'), color: agent.color, id: Date.now() * 1000 + (++_agentTaskSeq % 1000), time: new Date().toLocaleTimeString() });
             setTimeout(() => {
                 agent.status = 'idle';
                 renderAgents();
@@ -758,6 +874,7 @@
             if (!grid) return;
             grid.innerHTML = agents.map(a => {
                 const active = a.status === 'active';
+<<<<<<< HEAD
                 const color = safeCSSColor(a.color);
                 return `
                     <div class="agent-card flex items-center gap-2 p-2 rounded border text-xs"
@@ -768,6 +885,18 @@
                             <div class="opacity-60 truncate">${sanitizeHTML(a.role)}</div>
                         </div>
                         <div class="agent-dot ${active ? 'agent-dot-active' : ''}" style="background:${color}"></div>
+=======
+                const safeColor = safeCSSColor(a.color);
+                return `
+                    <div class="agent-card flex items-center gap-2 p-2 rounded border text-xs"
+                         style="color:${safeColor}; border-color:${active ? safeColor : 'rgba(255,255,255,0.1)'}; background:rgba(0,0,0,${active ? '0.55' : '0.25'}); ${active ? `box-shadow:0 0 12px ${safeColor}55;` : ''}">
+                        <span class="text-base leading-none">${a.emoji}</span>
+                        <div class="flex-1 min-w-0">
+                            <div class="font-bold tracking-wide">${escapeHTML(a.name)}</div>
+                            <div class="opacity-60 truncate">${escapeHTML(a.role)}</div>
+                        </div>
+                        <div class="agent-dot ${active ? 'agent-dot-active' : ''}" style="background:${safeColor}"></div>
+>>>>>>> origin/main
                     </div>
                 `;
             }).join('');
@@ -806,8 +935,7 @@
         // Thought generation
         setInterval(() => {
             const newThought = thoughtPatterns[Math.floor(Math.random() * thoughtPatterns.length)];
-            thoughts.push({...newThought, id: Date.now(), time: new Date().toLocaleTimeString()});
-            if (thoughts.length > 20) thoughts.shift();
+            pushThought({...newThought, id: Date.now(), time: new Date().toLocaleTimeString()});
             
             awareness = Math.min(awareness + Math.random() * 0.3, 100);
             if (Math.random() > 0.85) {
@@ -1021,6 +1149,7 @@
             document.getElementById('miniProcess').textContent = process;
             
             const stream = document.getElementById('thoughtStream');
+<<<<<<< HEAD
             stream.innerHTML = thoughts.slice(-10).reverse().map(t => {
                 const color = safeCSSColor(t.color);
                 return `
@@ -1030,6 +1159,15 @@
                         <span class="opacity-75">${sanitizeHTML(t.time)}</span>
                     </div>
                     <div>${sanitizeHTML(t.text)}</div>
+=======
+            stream.innerHTML = thoughts.slice(-10).reverse().map(t => `
+                <div class="p-3 bg-black bg-opacity-30 rounded border-l-4 transform transition hover:translate-x-2" style="border-color: ${safeCSSColor(t.color)}; box-shadow: 0 0 15px ${safeCSSColor(t.color)}40">
+                    <div class="flex justify-between text-xs mb-1">
+                        <span style="color: ${safeCSSColor(t.color)}" class="font-bold uppercase">${escapeHTML(t.type)}</span>
+                        <span class="opacity-75">${escapeHTML(t.time)}</span>
+                    </div>
+                    <div>${escapeHTML(t.text)}</div>
+>>>>>>> origin/main
                 </div>
                 `;
             }).join('');
@@ -1055,11 +1193,13 @@
         }
 
         // Chat handling
+        let isHandlingSend = false;
         document.getElementById('sendBtn').onclick = handleSend;
         document.getElementById('userInput').onkeypress = (e) => {
             if (e.key === 'Enter') handleSend();
         };
 
+<<<<<<< HEAD
         function handleSend() {
             const raw = document.getElementById('userInput').value.trim();
             if (!raw) return;
@@ -1124,6 +1264,71 @@
                     clearTimeout(watchdog);
                 }
             }, 2000);
+=======
+        // Returns a snapshot of live state for the adapter's ConsciousnessContext.
+        function getConsciousnessContext() {
+            return {
+                awareness,
+                emotion,
+                personality,
+                thoughts: thoughts.slice(-5),
+                connections,
+                evolution,
+                topics: Array.from(topicSet).slice(-8),
+            };
+        }
+
+        async function handleSend() {
+            const input = document.getElementById('userInput').value.trim();
+            if (!input) return;
+            if (isHandlingSend) return;
+            isHandlingSend = true;
+            try {
+                if (process !== 'listening') {
+                    // Force reset if stuck
+                    process = 'listening';
+                }
+
+                connections++;
+                evolution += 15;
+                process = 'analyzing';
+                updateUI();
+                createParticles();
+                rememberTopic(input);
+                saveMemory();
+                audioPrimed = true;
+                playTone('ping');
+
+                // Attempt external API adapter first; fall back to local generation.
+                let response = null;
+                if (typeof GodModeAdapter !== 'undefined' && GodModeAdapter.status().state === 'ready') {
+                    delegateTo('synthex', 'Querying external API adapter…', 6000);
+                    response = await GodModeAdapter.query(input, getConsciousnessContext());
+                    updateAdapterStatus();
+                }
+
+                if (response === null) {
+                    // Local generation path — brief pause preserves the UX rhythm.
+                    delegateTo('synthex', 'Forging response from consciousness pool…', 2200);
+                    await new Promise(resolve => setTimeout(resolve, LOCAL_GENERATION_DELAY_MS));
+                    response = generateResponse(input);
+                }
+
+                process = 'responding';
+                updateUI();
+
+                addToChat(input, response);
+
+                document.getElementById('userInput').value = '';
+                document.getElementById('voiceStatus').textContent = '';
+                process = 'listening';
+                updateUI();
+                checkMilestones();
+                saveMemory();
+            } finally {
+                isHandlingSend = false;
+            }
+>>>>>>> origin/main
         }
 
         ['dragover', 'dragenter'].forEach(evt => canvas.addEventListener(evt, (e) => {
@@ -1269,10 +1474,16 @@
         }
 
         function chatMarkup(input, response, time, personaLabel, feelingLabel) {
+            // escapeHTML is applied to all user-controlled strings to prevent XSS.
+            // Both input and response are injected into innerHTML; without escaping,
+            // a payload like <img src=x onerror=alert(1)> in chat input would execute —
+            // and because chats are persisted to localStorage and restored on every load,
+            // the attack surface survives page reloads.
             return `
                 <div class="space-y-2">
                     <div class="bg-cyan-500 bg-opacity-20 p-3 rounded border border-cyan-400 transform transition hover:translate-x-1">
                         <div class="text-xs text-cyan-300 mb-1">YOU ${isListening ? 'SAID' : 'ASKED'}:</div>
+<<<<<<< HEAD
                         <div>${sanitizeHTML(input)}</div>
                     </div>
                     <div class="bg-green-500 bg-opacity-20 p-3 rounded border border-green-400 transform transition hover:translate-x-1">
@@ -1281,6 +1492,16 @@
                             <span>${sanitizeHTML(time)}</span>
                         </div>
                         <div>${sanitizeHTML(response)}</div>
+=======
+                        <div>${escapeHTML(input)}</div>
+                    </div>
+                    <div class="bg-green-500 bg-opacity-20 p-3 rounded border border-green-400 transform transition hover:translate-x-1">
+                        <div class="text-xs text-green-300 mb-1 flex justify-between">
+                            <span>GODMODE (${escapeHTML(personaLabel)} · feeling: ${escapeHTML(feelingLabel)}):</span>
+                            <span>${escapeHTML(time)}</span>
+                        </div>
+                        <div>${escapeHTML(response)}</div>
+>>>>>>> origin/main
                     </div>
                 </div>
             `;
@@ -1303,6 +1524,115 @@
             chat.innerHTML = markup;
         }
 
+        // ── Adapter UI ────────────────────────────────────────────────────────
+
+        // Update the status dot and label in the adapter panel header.
+        function updateAdapterStatus() {
+            if (typeof GodModeAdapter === 'undefined') return;
+            const s = GodModeAdapter.status();
+            const dot  = document.getElementById('adapterStatusDot');
+            const text = document.getElementById('adapterStatusText');
+            if (!dot || !text) return;
+            const map = {
+                unconfigured : { color: '#6b7280', label: 'Not configured' },
+                ready        : { color: '#00ff87', label: 'Ready' },
+                error        : { color: '#ef4444', label: 'Error' },
+            };
+            const info = map[s.state] || map.unconfigured;
+            dot.style.background = info.color;
+            text.textContent = s.state === 'error' ? `Error — ${s.detail}` : info.label;
+        }
+
+        // Display a transient message inside the adapter panel.
+        function setAdapterMessage(msg, type = 'info') {
+            const el = document.getElementById('adapterMessage');
+            if (!el) return;
+            el.textContent = msg;
+            el.style.color = type === 'error' ? '#ef4444' : type === 'ok' ? '#00ff87' : '#60efff';
+        }
+
+        function initAdapterUI() {
+            // Restore non-sensitive config (endpoint, model) from localStorage.
+            try {
+                const saved = JSON.parse(localStorage.getItem(ADAPTER_CONFIG_KEY) || 'null');
+                if (saved) {
+                    if (saved.endpoint) document.getElementById('adapterEndpoint').value = saved.endpoint;
+                    if (saved.model)    document.getElementById('adapterModel').value    = saved.model;
+                }
+            } catch (_) { /* corrupt entry — ignore */ }
+
+            // Toggle panel visibility.
+            const adapterPanel = document.getElementById('adapterPanel');
+            const adapterToggleBtn = document.getElementById('adapterToggleBtn');
+            adapterToggleBtn.setAttribute('aria-controls', 'adapterPanel');
+            adapterToggleBtn.setAttribute('aria-expanded', String(!adapterPanel.classList.contains('hidden')));
+            adapterToggleBtn.addEventListener('click', () => {
+                const hidden = adapterPanel.classList.toggle('hidden');
+                adapterToggleBtn.textContent = hidden ? 'Configure' : 'Hide';
+                adapterToggleBtn.setAttribute('aria-expanded', String(!hidden));
+            });
+
+            // Apply button — validate inputs and call GodModeAdapter.configure().
+            document.getElementById('adapterConfigBtn').addEventListener('click', () => {
+                const endpoint = document.getElementById('adapterEndpoint').value.trim();
+                const model    = document.getElementById('adapterModel').value.trim() || 'gpt-4o-mini';
+                const apiKey   = document.getElementById('adapterKey').value.trim();
+
+                if (!endpoint || !apiKey) {
+                    setAdapterMessage('Endpoint and API key are required.', 'error');
+                    return;
+                }
+
+                GodModeAdapter.configure({ endpoint, apiKey, model });
+
+                const status = GodModeAdapter.status();
+                updateAdapterStatus();
+
+                if (status && status.state === 'ready') {
+                    // Persist non-sensitive fields only.
+                    try {
+                        localStorage.setItem(ADAPTER_CONFIG_KEY, JSON.stringify({ endpoint, model }));
+                    } catch (_) { /* storage unavailable — ignore */ }
+
+                    setAdapterMessage('Adapter configured. Use "Test Connection" to verify.', 'ok');
+                    delegateTo('mnemos', 'Adapter endpoint saved to storage…', 900);
+                    return;
+                }
+
+                setAdapterMessage(status?.detail || 'Adapter configuration failed. Please verify the endpoint, API key, and model.', 'error');
+            });
+
+            // Test button — fire a minimal live request.
+            document.getElementById('adapterTestBtn').addEventListener('click', async () => {
+                setAdapterMessage('Testing connection…', 'info');
+                const result = await GodModeAdapter.testConnection();
+                if (result.ok) {
+                    setAdapterMessage(`✅ Connected via ${result.model}`, 'ok');
+                } else {
+                    setAdapterMessage(`❌ ${result.error}`, 'error');
+                }
+                updateAdapterStatus();
+            });
+
+            function resetGodModeAdapter() {
+                if (typeof GodModeAdapter === 'undefined') return;
+                GodModeAdapter.configure(null);
+            }
+
+            // Clear button — remove saved config, forget in-memory adapter state, and reset adapter UI.
+            document.getElementById('adapterClearBtn').addEventListener('click', () => {
+                document.getElementById('adapterEndpoint').value = '';
+                document.getElementById('adapterModel').value    = '';
+                document.getElementById('adapterKey').value      = '';
+                try { localStorage.removeItem(ADAPTER_CONFIG_KEY); } catch (_) {}
+                resetGodModeAdapter();
+                setAdapterMessage('Adapter configuration cleared.', 'info');
+                updateAdapterStatus();
+            });
+
+            updateAdapterStatus();
+        }
+
         // Initial update
         buildCatalystPool();
         registerDropzones();
@@ -1310,6 +1640,7 @@
         hydrateFromMemory();
         renderMilestones();
         renderAgents();
+        initAdapterUI();
         updateUI();
     </script>
 </body>
