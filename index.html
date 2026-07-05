@@ -630,7 +630,7 @@
             if (!agent) return;
             agent.status = 'active';
             renderAgents();
-            pushThought({ text: `[${sanitizeHTML(agent.name)}] ${sanitizeHTML(task)}`, type: agent.role.toLowerCase().replace(/\s+/g, '-'), color: agent.color, id: Date.now() * 1000 + (++_agentTaskSeq % 1000), time: new Date().toLocaleTimeString() });
+            pushThought({ text: `[${agent.name}] ${task}`, type: agent.role.toLowerCase().replace(/\s+/g, '-'), color: agent.color, id: Date.now() * 1000 + (++_agentTaskSeq % 1000), time: new Date().toLocaleTimeString() });
             setTimeout(() => {
                 agent.status = 'idle';
                 renderAgents();
