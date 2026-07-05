@@ -1302,7 +1302,7 @@
 
             function resetGodModeAdapter() {
                 if (typeof GodModeAdapter === 'undefined') return;
-                GodModeAdapter.reset();
+                GodModeAdapter.configure(null);
             }
 
             // Clear button — remove saved config, forget in-memory adapter state, and reset adapter UI.

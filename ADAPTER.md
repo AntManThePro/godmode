@@ -59,12 +59,10 @@ GodModeAdapter.configure({
 
 ---
 
-### `reset(): void`
-
-Clears all configuration and returns the adapter to the `'unconfigured'` state. Equivalent to `configure(null)`, but makes the intent explicit for cleanup flows such as a "Clear" button.
+Use `configure(null)` to clear all configuration and return the adapter to the `'unconfigured'` state:
 
 ```javascript
-GodModeAdapter.reset();
+GodModeAdapter.configure(null);
 // GodModeAdapter.status().state === 'unconfigured'
 ```
 

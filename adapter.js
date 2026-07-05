@@ -14,10 +14,6 @@
  *     Does NOT validate reachability; call testConnection() for that.
  *     Pass null to clear all configuration and return to 'unconfigured' state.
  *
- *   reset(): void
- *     Clears all configuration and returns the adapter to 'unconfigured' state.
- *     Equivalent to configure(null) but more explicit for cleanup flows.
- *
  *   query(input: string, context: ConsciousnessContext): Promise<string | null>
  *     Returns a non-empty response string on success.
  *     Returns null to signal the caller to use its local fallback — NEVER throws.
@@ -421,17 +417,6 @@ const GodModeAdapter = (() => {
         return { ok: false, error: s.detail || 'Connection test failed — check the browser console for details.' };
     }
 
-    /**
-     * reset — clear all configuration and return to 'unconfigured' state.
-     *
-     * Equivalent to configure(null). Intended for explicit cleanup flows
-     * (e.g. a "Clear" button) where the intent is clearly to deactivate the
-     * adapter rather than to change its settings.
-     */
-    function reset() {
-        configure(null);
-    }
-
     // Expose the public API as a frozen object so callers cannot mutate it
-    return Object.freeze({ configure, status, query, testConnection, reset });
+    return Object.freeze({ configure, status, query, testConnection });
 })();
