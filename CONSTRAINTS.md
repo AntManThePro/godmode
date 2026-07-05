@@ -57,7 +57,7 @@ Modules must not cache copies of `State` fields that can drift.
 | Pool construction | Built fresh on every `execute()` call to reflect current `State` |
 | Secret detection | `darkSecretTriggers` scanned before topic routing; short-circuits on first match |
 | Milestone augmentation | Extra pool entries appended only when `State.unlockedMilestones.size > 0` |
-| Output | Plain text string; no HTML tags injected from response logic |
+| Output | Plain text string; no HTML tags injected from response logic, and rendered as HTML-escaped text before DOM insertion |
 | External calls | None — all synthesis is local template-pool selection |
 | Fallback | Falls back to `pools.generic` when no topic keyword matches |
 
