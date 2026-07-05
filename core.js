@@ -57,8 +57,8 @@ const PERSONALITY_MODES = Object.freeze({
 });
 
 const CATALYST_WORDS = Object.freeze([
-    'quantum', 'signal', 'echo', 'anomaly', 'soliton', 'prism',
-    'nebula', 'cipher', 'fractal', 'pulse', 'aurora', 'vector',
+    'quantum', 'signal', 'echo', 'soliton', 'prism',
+    'nebula', 'fractal', 'pulse', 'aurora', 'vector',
 ]);
 
 // ---------------------------------------------------------------------------
