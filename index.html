@@ -548,7 +548,7 @@
                     localStorage.setItem(memoryKey, JSON.stringify(payload));
                     document.getElementById('memoryStatus').textContent = 'Persisted (pruned)';
                 } catch (e2) {
-                    log(L.ERROR, ErrorCode.STORAGE_WRITE, 'Storage write failed after pruning', { error: truncateLogValue(e2.message) });
+                    log(L.ERROR, ErrorCode.STORAGE_WRITE, 'Storage write failed after pruning', { error: truncateLogValue(e2) });
                     document.getElementById('memoryStatus').textContent = 'Storage full – state held in memory';
                 }
             }
