@@ -966,15 +966,18 @@
             document.getElementById('miniProcess').textContent = process;
             
             const stream = document.getElementById('thoughtStream');
-            stream.innerHTML = thoughts.slice(-10).reverse().map(t => `
-                <div class="p-3 bg-black bg-opacity-30 rounded border-l-4 transform transition hover:translate-x-2" style="border-color: ${safeCSSColor(t.color)}; box-shadow: 0 0 15px ${safeCSSColor(t.color)}40">
+            stream.innerHTML = thoughts.slice(-10).reverse().map(t => {
+                const safeColor = safeCSSColor(t.color);
+                return `
+                <div class="p-3 bg-black bg-opacity-30 rounded border-l-4 transform transition hover:translate-x-2" style="border-color: ${safeColor}; box-shadow: 0 0 15px ${safeColor}40">
                     <div class="flex justify-between text-xs mb-1">
-                        <span style="color: ${safeCSSColor(t.color)}" class="font-bold uppercase">${escapeHTML(t.type)}</span>
+                        <span style="color: ${safeColor}" class="font-bold uppercase">${escapeHTML(t.type)}</span>
                         <span class="opacity-75">${escapeHTML(t.time)}</span>
                     </div>
                     <div>${escapeHTML(t.text)}</div>
                 </div>
-            `).join('');
+            `;
+            }).join('');
             renderMilestones();
             renderTopics();
             renderAgents();
