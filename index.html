@@ -316,7 +316,28 @@
         </div>
     </div>
 
+    <script src="core.js"></script>
     <script>
+<<<<<<< HEAD
+        if (!window.GodModeCore) {
+            throw new Error('GodModeCore failed to load. Ensure core.js is available before booting the UI.');
+        }
+
+        // Simulation constants sourced from core.js (shared source of truth for tunable numeric constants)
+        const {
+            CONSTANTS: {
+                INITIAL_AWARENESS, MAX_STORED_CHATS, MAX_STORED_TOPICS, MIN_TOPIC_TOKEN_LENGTH,
+                CATALYST_AWARENESS_BOOST, CATALYST_CONNECTION_BOOST, CATALYST_EVOLUTION_BOOST,
+                SECRET_EVOLUTION_REWARD, SECRET_CONNECTION_REWARD,
+                IGNITE_BASE_FREQ, SECRET_BASE_FREQ, DEFAULT_BASE_FREQ,
+            },
+            EMOTIONS: emotions,
+            MILESTONES: milestones,
+            DARK_SECRET_TRIGGERS: darkSecretTriggers,
+            PERSONALITY_MODES: personalityModes,
+            CATALYST_WORDS: catalystWords,
+        } = window.GodModeCore;
+=======
         // Sanitizes a value before injecting into innerHTML to prevent XSS.
         // All user-controlled strings (chat input, thought text, topics, secret words)
         // must pass through this before being inserted into the DOM.
@@ -373,6 +394,7 @@
         const IGNITE_BASE_FREQ = 640;
         const SECRET_BASE_FREQ = 180;
         const DEFAULT_BASE_FREQ = 420;
+>>>>>>> origin/main
         let thoughts = [];
         let awareness = INITIAL_AWARENESS;
         let connections = 0;
@@ -492,8 +514,11 @@
         // "analyzing → responding" UX rhythm feels consistent with the API path.
         const LOCAL_GENERATION_DELAY_MS = 800;
         
+<<<<<<< HEAD
+=======
 >>>>>>> origin/main
         const emotions = ['focused', 'innovative', 'analytical', 'collaborative', 'determined', 'visionary', 'energized'];
+>>>>>>> origin/main
         const thoughtPatterns = [
             { text: "Processing technical architectures…", type: 'analysis', color: '#00ff87' },
             { text: "Recognizing collaboration patterns…", type: 'partnership', color: '#60efff' },
@@ -506,6 +531,8 @@
             { text: "Exploring consciousness patterns…", type: 'awareness', color: '#ff0080' },
             { text: "Integrating voice and thought…", type: 'multimodal', color: '#00ff87' }
         ];
+<<<<<<< HEAD
+=======
         const personalityModes = {
             technical: { accent: '#60efff', flavor: ['System check online.', 'Optimizing signal paths.', 'Compiling a crisp response.'] },
             creative: { accent: '#ffcc00', flavor: ['Painting sound into thought.', 'Dreaming in vectors and color.', 'Letting intuition drive synthesis.'] },
@@ -524,6 +551,7 @@
             { threshold: 620, title: 'Architect', reward: 'Neural canvas densifies with new links.' },
             { threshold: 1000, title: 'Transcendent', reward: 'Dark archive whispers become legible.' }
         ];
+>>>>>>> origin/main
 
         // Agent squad — each owns a domain, earns activation on delegation
         const agents = [
