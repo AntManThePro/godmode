@@ -562,7 +562,7 @@
 
         function triggerCatalyst(word, origin = 'playground', coords) {
             const color = ['#00ff87', '#ff0080', '#60efff', '#ffcc00'][Math.floor(Math.random() * 4)];
-            pushThought({ text: `Catalyst "${escapeHTML(word)}" ignited pathways`, type: 'catalyst', color, id: Date.now(), time: new Date().toLocaleTimeString() });
+            pushThought({ text: `Catalyst "${word}" ignited pathways`, type: 'catalyst', color, id: Date.now(), time: new Date().toLocaleTimeString() });
             awareness = Math.min(awareness + CATALYST_AWARENESS_BOOST, 100);
             connections += CATALYST_CONNECTION_BOOST;
             evolution += CATALYST_EVOLUTION_BOOST;
