@@ -301,7 +301,13 @@
         // @param {string} color  Candidate color value.
         // @returns {string} The input color if valid; '#00ff87' (safe default) otherwise.
         function safeCSSColor(color) {
-            return /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(color) ? color : '#00ff87';
+            const m = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.exec(String(color));
+            if (!m) return '#00ff87';
+            let hex = m[1];
+            if (hex.length === 3) hex = hex.split('').map(c => c + c).join('');
+            else if (hex.length === 4) hex = hex.slice(0, 3).split('').map(c => c + c).join('');
+            else if (hex.length === 8) hex = hex.slice(0, 6);
+            return `#${hex}`;
         }
 
         // State
