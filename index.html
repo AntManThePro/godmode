@@ -613,7 +613,7 @@
             milestones.forEach(m => {
                 if (evolution >= m.threshold && !unlockedMilestones.has(m.threshold)) {
                     unlockedMilestones.add(m.threshold);
-                    pushThought({ text: `Milestone unlocked: ${sanitizeHTML(m.title)}`, type: 'milestone', color: '#ffcc00', id: Date.now(), time: new Date().toLocaleTimeString() });
+                    pushThought({ text: `Milestone unlocked: ${m.title}`, type: 'milestone', color: '#ffcc00', id: Date.now(), time: new Date().toLocaleTimeString() });
                     delegateTo('evolver', `Milestone unlocked: ${m.title}`, 2000);
                     playTone('ignite');
                     updateUI();
